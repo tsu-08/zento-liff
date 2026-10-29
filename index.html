@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v1 2026-10-29
+<!-- 全棟品質評価 確認画面（LIFF）v2 2026-10-29（v1 から：検査員のフルネーム入力）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -60,7 +60,8 @@ function render(d) {
     app.innerHTML = '<p>' + esc(d.message) + '</p><button onclick="load()">更新</button>';
     return;
   }
-  let h = '<div class="row"><div><div class="k">物件</div><div>' + esc(d.name) + '</div></div>'
+  let h = d.answer ? '<p class="err" style="color:var(--acc)">' + esc(d.answer) + '</p>' : '';
+  h += '<div class="row"><div><div class="k">物件</div><div>' + esc(d.name) + '</div></div>'
         + '<div><div class="k">工程・検査日</div><div>' + esc(d.process) + '　' + esc(d.date) + '</div></div></div>'
         + '<div class="row" style="margin-top:8px"><div><div class="k">暫定の点数</div><div class="score">' + esc(d.score) + '</div></div>'
         + '<div class="muted" style="align-self:end">確定前の点数です</div></div>';
@@ -71,6 +72,10 @@ function render(d) {
       if (c.type === 'inspector') {
         h += c.done ? '<div class="muted">回答済み</div>'
           : '<div><button onclick="answer(1)">はい</button><button class="sec" onclick="answer(0)">違う</button></div>';
+      }
+      if (c.type === 'fullname') {
+        h += c.done ? '<div class="muted">回答済み</div>'
+          : '<div><input id="fullname" placeholder="例：山田 太郎" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;width:60%;background:var(--card);color:var(--ink)"><button onclick="answerName()">送る</button></div>';
       }
       h += '</div>';
     });
@@ -91,6 +96,11 @@ function render(d) {
 }
 
 async function load() { app.textContent = '読み込み中…'; try { render(await call()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
+async function answerName() {
+  const v = (document.getElementById('fullname') || {}).value || '';
+  if (!v.trim()) return;
+  app.textContent = '送信中…'; try { render(await call({ a: 'fullname', name: v.trim() })); } catch (e) { load(); }
+}
 async function answer(ok) { app.textContent = '送信中…'; try { render(await call({ a: 'inspector', ok: ok })); } catch (e) { load(); } }
 
 liff.init({ liffId: LIFF_ID }).then(() => {
