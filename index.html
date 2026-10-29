@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v2 2026-10-29（v1 から：検査員のフルネーム入力）
+<!-- 全棟品質評価 確認画面（LIFF）v3 2026-10-29（v2 から：指摘を直す、共通・重大の印）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -29,6 +29,11 @@
   .muted { color:var(--sub); font-size:13px; }
   .err { color:var(--warn); }
   s { color:var(--sub); }
+  .edit { margin-top:8px; padding:10px; border:1px dashed var(--line); border-radius:8px; display:none; }
+  .edit.open { display:block; }
+  .edit label { display:block; font-size:13px; color:var(--sub); margin-top:6px; }
+  .edit select, .edit input[type=number] { font:inherit; width:100%; padding:6px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+  button.small { padding:4px 10px; font-size:13px; }
 </style>
 </head>
 <body>
@@ -46,15 +51,18 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbyljjXpJ46GLpiUFloQ3nnC
 const app = document.getElementById('app');
 const fileId = new URLSearchParams(location.search).get('f')
   || new URLSearchParams((new URLSearchParams(location.search).get('liff.state') || '').replace(/^\?/, '')).get('f');
+const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
+let last = null;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 async function call(extra) {
-  const q = new URLSearchParams(Object.assign({ t: liff.getIDToken(), f: fileId }, extra || {}));
+  const q = new URLSearchParams(Object.assign({ t: liff.getIDToken(), f: fileId, s: sessionStart }, extra || {}));
   const res = await fetch(API_URL + '?' + q.toString());
   return res.json();
 }
 
 function render(d) {
+  last = d;
   if (!d.ok) { app.innerHTML = '<p class="err">' + esc(d.error) + '</p>'; return; }
   if (d.state !== '完了') {
     app.innerHTML = '<p>' + esc(d.message) + '</p><button onclick="load()">更新</button>';
@@ -84,18 +92,41 @@ function render(d) {
   d.shiteki.forEach(s => {
     const tags = '<span class="tag' + (s.kind === '特記' ? ' warn' : '') + '">' + esc(s.kind) + '</span>'
       + (s.ask ? '<span class="tag warn">要確認</span>' : '')
-      + (s.places > 1 ? '<span class="tag">' + esc(s.places) + 'か所</span>' : '');
+      + (s.places > 1 ? '<span class="tag">' + esc(s.places) + 'か所</span>' : '')
+      + (s.common ? '<span class="tag warn">共通</span>' : '')
+      + (s.severe ? '<span class="tag warn">重大</span>' : '')
+      + (s.cancelled ? '<span class="tag">取消</span>' : '');
     const text = s.cancelled ? '<s>' + esc(s.text) + '</s>' : esc(s.text);
     h += '<div class="issue"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
       + '<div class="t">' + text + '</div>'
       + (s.item ? '<div class="muted">項目：' + esc(s.item) + '</div>' : '')
-      + (s.place ? '<div class="muted">場所：' + esc(s.place) + '</div>' : '') + '</div>';
+      + (s.place ? '<div class="muted">場所：' + esc(s.place) + '</div>' : '')
+      + (d.editable ? '<button class="sec small" onclick="toggleEdit(\'' + esc(s.id) + '\')">直す</button>' + editor(s, d.items) : '')
+      + '</div>';
   });
-  h += '<p class="muted" style="margin-top:12px">指摘の直し・写真の貼り付け・承認依頼は、次の版で付けます。</p>';
+  h += '<p class="muted" style="margin-top:12px">写真の貼り付け・承認依頼は、次の版で付けます。</p>';
   app.innerHTML = h;
 }
 
 async function load() { app.textContent = '読み込み中…'; try { render(await call()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
+function editor(s, items) {
+  const kinds = ['指摘', '未施工', '申し送り', '特記'];
+  const ko = kinds.map(k => '<option' + (k === s.kind ? ' selected' : '') + '>' + k + '</option>').join('');
+  const io = '<option value="">（項目なし）</option>' + items.map(i => '<option value="' + esc(i.id) + '"' + (i.id === s.itemId ? ' selected' : '') + '>' + esc(i.name) + '</option>').join('');
+  const k = esc(s.id);
+  return '<div class="edit" id="ed-' + k + '">'
+    + '<label>種別</label><select id="kind-' + k + '">' + ko + '</select>'
+    + '<label>項目</label><select id="item-' + k + '">' + io + '</select>'
+    + '<label>か所数</label><input type="number" min="1" max="99" id="places-' + k + '" value="' + esc(s.places || 1) + '">'
+    + '<label><input type="checkbox" id="cancel-' + k + '"' + (s.cancelled ? ' checked' : '') + '> 取消（この指摘は数えない）</label>'
+    + '<button onclick="saveEdit(\'' + k + '\')">保存</button><button class="sec" onclick="toggleEdit(\'' + k + '\')">やめる</button></div>';
+}
+function toggleEdit(id) { const e = document.getElementById('ed-' + id); if (e) e.classList.toggle('open'); }
+async function saveEdit(id) {
+  const g = n => document.getElementById(n + '-' + id);
+  const ex = { a: 'edit', id: id, kind: g('kind').value, item: g('item').value, places: String(g('places').value || 1), cancel: g('cancel').checked ? '1' : '0' };
+  app.textContent = '保存中…'; try { render(await call(ex)); } catch (e) { load(); }
+}
 async function answerName() {
   const v = (document.getElementById('fullname') || {}).value || '';
   if (!v.trim()) return;
