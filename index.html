@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v4 2026-10-29（v3 から：まとめて保存、指摘の追記、是正指示、か所数は1/2/3以上（共通）、AI予測の表示）
+<!-- 全棟品質評価 確認画面（LIFF）v5 2026-10-29（v4 から：登録の是正指示（30 の改善策）から選べる、是正指示の元（記録書・登録・AI案）を表示）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -81,6 +81,14 @@ async function postData(body) {
 
 function opts(list, cur) { return list.map(([v, l]) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(l) + '</option>').join(''); }
 function itemOpts(cur) { return '<option value="">（項目なし）</option>' + (last.items || []).map(i => '<option value="' + esc(i.id) + '"' + (i.id === cur ? ' selected' : '') + '>' + esc(i.name) + '</option>').join(''); }
+function fixesOf(item) { const i = (last.items || []).find(x => x.id === item); return i ? (i.fixes || []) : []; }
+function fixOpts(item, kz) {
+  const f = fixesOf(item);
+  if (!f.length) return '';
+  return '<label>登録の是正指示から選ぶ</label><select onchange="pickFix(this)" data-item="' + esc(item) + '"><option value="">（選ばない）</option>'
+    + f.map(x => '<option value="' + esc(x.id) + '"' + (x.id === kz ? ' selected' : '') + '>' + esc(x.title) + '</option>').join('') + '</select>';
+}
+const FROM = { '記録書': '記録書', '改善策': '登録', 'AI案': 'AI案', '改善策（確認画面）': '登録', '確認画面': '手入力' };
 function itemName(id) { const i = (last.items || []).find(x => x.id === id); return i ? i.name : ''; }
 
 function render(d) {
@@ -114,7 +122,7 @@ function render(d) {
 
 function issueHtml(s) {
   const p = pend[s.id] || {};
-  const v = { kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), cancel: p.cancel ?? s.cancelled };
+  const v = { kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled };
   const changed = !!pend[s.id];
   const plLabel = (PLACES.find(x => x[0] === v.places) || PLACES[0])[1];
   const how = s.method === '追記' ? '<span class="tag acc">追記</span>'
@@ -130,7 +138,7 @@ function issueHtml(s) {
   let h = '<div class="issue' + (changed ? ' changed' : '') + '"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
     + '<div class="t">' + text + '</div>'
     + '<div class="muted">項目：' + (esc(itemName(v.item)) || '（なし）') + ' ' + how + '</div>'
-    + '<div class="muted">是正：' + (esc(v.fix) || '（なし）') + '</div>'
+    + '<div class="muted">是正：' + (esc(v.fix) || '（なし）') + (changed ? '' : (FROM[s.fixFrom] ? ' <span class="tag">' + FROM[s.fixFrom] + '</span>' : '')) + '</div>'
     + (s.place ? '<div class="muted">場所：' + esc(s.place) + '</div>' : '');
   if (last.editable) {
     h += '<button class="sec small" onclick="toggle(\'' + k + '\')">直す</button>'
@@ -138,6 +146,7 @@ function issueHtml(s) {
       + '<label>種別</label><select onchange="setp(\'' + k + '\',\'kind\',this.value)">' + opts(KINDS.map(x => [x, x]), v.kind) + '</select>'
       + '<label>項目</label><select onchange="setp(\'' + k + '\',\'item\',this.value)">' + itemOpts(v.item) + '</select>'
       + '<label>か所数</label><select onchange="setp(\'' + k + '\',\'places\',this.value)">' + opts(PLACES, v.places) + '</select>'
+      + fixOpts(v.item, v.kz).replace('pickFix(this)', 'pickFix(this,\'' + k + '\')')
       + '<label>是正指示</label><input type="text" value="' + esc(v.fix) + '" onchange="setp(\'' + k + '\',\'fix\',this.value)">'
       + '<label><input type="checkbox"' + (v.cancel ? ' checked' : '') + ' onchange="setp(\'' + k + '\',\'cancel\',this.checked)"> 取消（この指摘は数えない）</label>'
       + '</div>';
@@ -160,19 +169,27 @@ function newForm() {
     + '<label>指摘の内容（必須）</label><input type="text" id="n-text">'
     + '<label>場所</label><input type="text" id="n-place">'
     + '<label>種別</label><select id="n-kind">' + opts(KINDS.map(x => [x, x]), '指摘') + '</select>'
-    + '<label>項目</label><select id="n-item">' + itemOpts('') + '</select>'
+    + '<label>項目</label><select id="n-item" onchange="newItem(this.value)">' + itemOpts('') + '</select>'
+    + '<div id="n-fixsel"></div>'
     + '<label>か所数</label><select id="n-places">' + opts(PLACES, '1') + '</select>'
     + '<label>是正指示</label><input type="text" id="n-fix">'
     + '<button onclick="addNew()">一覧に加える</button><span class="muted">（最後に「保存する」で送ります）</span></div>';
 }
 
+function pickFix(sel, id) {
+  const x = fixesOf(sel.dataset.item).find(f => f.id === sel.value);
+  if (id) { pend[id] = Object.assign(pend[id] || {}, { kz: sel.value }); if (x) pend[id].fix = x.how; setp(id, 'kz', sel.value); return; }
+  document.getElementById('n-kz').value = sel.value; if (x) document.getElementById('n-fix').value = x.how;
+}
+function newItem(item) { document.getElementById('n-fixsel').innerHTML = fixOpts(item, '') + '<input type="hidden" id="n-kz" value="">'; }
 function toggle(id) { const e = document.getElementById('ed-' + id); if (e) e.classList.toggle('open'); }
 function setp(id, key, val) {
   const s = last.shiteki.find(x => x.id === id); if (!s) return;
   pend[id] = Object.assign(pend[id] || {}, { [key]: val });
+  if (key === 'item') pend[id].kz = '';
   // 元と同じに戻したら未保存から外す
   const p = pend[id], same = (p.kind ?? s.kind) === s.kind && (p.item ?? s.itemId) === s.itemId && (p.places ?? placesKey(s)) === placesKey(s)
-    && (p.fix ?? (s.fix || '')) === (s.fix || '') && (p.cancel ?? s.cancelled) === s.cancelled;
+    && (p.fix ?? (s.fix || '')) === (s.fix || '') && (p.kz ?? (s.kz || '')) === (s.kz || '') && (p.cancel ?? s.cancelled) === s.cancelled;
   if (same) delete pend[id];
   rerender(id);
 }
@@ -180,7 +197,8 @@ function rerender(openId) { const y = window.scrollY; render(last); if (openId) 
 function addNew() {
   const g = n => document.getElementById('n-' + n).value;
   if (!g('text').trim()) { const p = document.createElement('p'); p.className = 'err'; p.textContent = '指摘の内容を入れてください。'; document.getElementById('ed-new').prepend(p); return; }
-  adds.push({ text: g('text').trim(), place: g('place').trim(), kind: g('kind'), item: g('item'), places: g('places'), fix: g('fix').trim() });
+  const kzEl = document.getElementById('n-kz');
+  adds.push({ text: g('text').trim(), place: g('place').trim(), kind: g('kind'), item: g('item'), places: g('places'), fix: g('fix').trim(), kz: kzEl ? kzEl.value : '' });
   rerender();
 }
 function removeAdd(i) { adds.splice(i, 1); rerender(); }
@@ -193,7 +211,7 @@ function updateBar() {
 async function saveAll() {
   const edits = Object.keys(pend).map(id => {
     const s = last.shiteki.find(x => x.id === id), p = pend[id];
-    return { id: id, kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), cancel: p.cancel ?? s.cancelled };
+    return { id: id, kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled };
   });
   document.getElementById('barText').textContent = '保存中…';
   try {
