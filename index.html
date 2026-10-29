@@ -4,36 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v3 2026-10-29（v2 から：指摘を直す、共通・重大の印）
+<!-- 全棟品質評価 確認画面（LIFF）v4 2026-10-29（v3 から：まとめて保存、指摘の追記、是正指示、か所数は1/2/3以上（共通）、AI予測の表示）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
-  :root { --bg:#f6f7f5; --card:#fff; --ink:#1d2421; --sub:#5d6b65; --line:#dde3df; --acc:#1f7a6d; --warn:#b4541a; --warnbg:#fdf1e8; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111614; --card:#1a201d; --ink:#e8eeeb; --sub:#9aa8a1; --line:#2c3531; --acc:#4fb8a6; --warn:#f0a36b; --warnbg:#2b2018; } }
+  :root { --bg:#f6f7f5; --card:#fff; --ink:#1d2421; --sub:#5d6b65; --line:#dde3df; --acc:#1f7a6d; --warn:#b4541a; --warnbg:#fdf1e8; --new:#e8f4f1; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111614; --card:#1a201d; --ink:#e8eeeb; --sub:#9aa8a1; --line:#2c3531; --acc:#4fb8a6; --warn:#f0a36b; --warnbg:#2b2018; --new:#17302b; } }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif; padding-bottom:72px; }
   main { max-width:560px; margin:0 auto; padding:16px; }
   h1 { font-size:18px; margin:4px 0 12px; }
+  h2 { font-size:16px; margin:16px 0 8px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:12px; }
   .row { display:flex; justify-content:space-between; gap:8px; }
   .k { color:var(--sub); font-size:13px; }
   .score { font-size:32px; font-weight:700; color:var(--acc); }
   .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:10px; border:1px solid var(--line); color:var(--sub); margin-right:4px; }
   .tag.warn { border-color:var(--warn); color:var(--warn); }
+  .tag.acc { border-color:var(--acc); color:var(--acc); }
   .issue { border-top:1px solid var(--line); padding:10px 0; }
   .issue:first-child { border-top:none; }
+  .issue.changed { background:var(--new); margin:0 -8px; padding:10px 8px; border-radius:8px; }
   .issue .t { font-weight:600; }
   .check { background:var(--warnbg); border:1px solid var(--warn); border-radius:10px; padding:12px; margin-bottom:10px; }
   button { font:inherit; border-radius:8px; border:1px solid var(--acc); background:var(--acc); color:#fff; padding:8px 16px; margin:6px 6px 0 0; }
   button.sec { background:transparent; color:var(--acc); }
+  button.small { padding:4px 10px; font-size:13px; }
   .muted { color:var(--sub); font-size:13px; }
   .err { color:var(--warn); }
+  .ok { color:var(--acc); }
   s { color:var(--sub); }
   .edit { margin-top:8px; padding:10px; border:1px dashed var(--line); border-radius:8px; display:none; }
   .edit.open { display:block; }
   .edit label { display:block; font-size:13px; color:var(--sub); margin-top:6px; }
-  .edit select, .edit input[type=number] { font:inherit; width:100%; padding:6px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
-  button.small { padding:4px 10px; font-size:13px; }
+  .edit select, .edit input[type=text] { font:inherit; width:100%; padding:6px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+  .bar { position:fixed; left:0; right:0; bottom:0; background:var(--card); border-top:1px solid var(--line); padding:10px 16px; display:none; }
+  .bar.show { display:block; }
+  .bar .in { max-width:560px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .bar button { margin:0 0 0 6px; }
 </style>
 </head>
 <body>
@@ -42,6 +50,7 @@
   <div id="app" class="card">読み込み中…</div>
   <p class="muted">この画面はLINEのボタンから開いた本人だけが見られます。リンクを他の人に送っても開けません。</p>
 </main>
+<div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" onclick="discard()">取り消す</button><button onclick="saveAll()">保存する</button></span></div></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 // ===== 設定（鍵ではない。公開されても困らない値だけ） =====
@@ -49,90 +58,158 @@ const LIFF_ID = '2012275755-X1vUnCK8';
 const API_URL = 'https://script.google.com/macros/s/AKfycbyljjXpJ46GLpiUFloQ3nnCi0ASy2Mhc88gn8C3z_kJo04ncJ8uJ5QWS-blT58K4ebM/exec';
 // =====
 const app = document.getElementById('app');
-const fileId = new URLSearchParams(location.search).get('f')
-  || new URLSearchParams((new URLSearchParams(location.search).get('liff.state') || '').replace(/^\?/, '')).get('f');
+const qs = new URLSearchParams(location.search);
+const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-let last = null;
+const KINDS = ['指摘', '未施工', '申し送り', '特記'];
+const PLACES = [['1', '1か所'], ['2', '2か所'], ['3+', '3か所以上（共通）']];
+let last = null;          // 最後に受け取った内容
+let pend = {};            // 直したが未保存のもの { 指摘ID: {kind,item,places,fix,cancel} }
+let adds = [];            // 追記したが未保存のもの
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const placesKey = s => (s.common || Number(s.places) >= 3) ? '3+' : (Number(s.places) === 2 ? '2' : '1');
 
-async function call(extra) {
+async function getData(extra) {
   const q = new URLSearchParams(Object.assign({ t: liff.getIDToken(), f: fileId, s: sessionStart }, extra || {}));
-  const res = await fetch(API_URL + '?' + q.toString());
+  return (await fetch(API_URL + '?' + q.toString())).json();
+}
+async function postData(body) {
+  const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(Object.assign({ liff: true, t: liff.getIDToken(), f: fileId, s: sessionStart }, body)) });
   return res.json();
 }
 
+function opts(list, cur) { return list.map(([v, l]) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(l) + '</option>').join(''); }
+function itemOpts(cur) { return '<option value="">（項目なし）</option>' + (last.items || []).map(i => '<option value="' + esc(i.id) + '"' + (i.id === cur ? ' selected' : '') + '>' + esc(i.name) + '</option>').join(''); }
+function itemName(id) { const i = (last.items || []).find(x => x.id === id); return i ? i.name : ''; }
+
 function render(d) {
   last = d;
-  if (!d.ok) { app.innerHTML = '<p class="err">' + esc(d.error) + '</p>'; return; }
-  if (d.state !== '完了') {
-    app.innerHTML = '<p>' + esc(d.message) + '</p><button onclick="load()">更新</button>';
-    return;
-  }
-  let h = d.answer ? '<p class="err" style="color:var(--acc)">' + esc(d.answer) + '</p>' : '';
+  if (!d.ok) { app.innerHTML = '<p class="err">' + esc(d.error) + '</p>'; updateBar(); return; }
+  if (d.state !== '完了') { app.innerHTML = '<p>' + esc(d.message) + '</p><button onclick="load()">更新</button>'; updateBar(); return; }
+  let h = d.answer ? '<p class="ok">' + esc(d.answer) + '</p>' : '';
   h += '<div class="row"><div><div class="k">物件</div><div>' + esc(d.name) + '</div></div>'
-        + '<div><div class="k">工程・検査日</div><div>' + esc(d.process) + '　' + esc(d.date) + '</div></div></div>'
-        + '<div class="row" style="margin-top:8px"><div><div class="k">暫定の点数</div><div class="score">' + esc(d.score) + '</div></div>'
-        + '<div class="muted" style="align-self:end">確定前の点数です</div></div>';
+     + '<div><div class="k">工程・検査日</div><div>' + esc(d.process) + '　' + esc(d.date) + '</div></div></div>'
+     + '<div class="row" style="margin-top:8px"><div><div class="k">暫定の点数</div><div class="score">' + esc(d.score) + '</div></div>'
+     + '<div class="muted" style="align-self:end">確定前の点数です</div></div>';
   if (d.checks && d.checks.length) {
-    h += '<h2 style="font-size:16px;margin:16px 0 8px">確認してください</h2>';
+    h += '<h2>確認してください</h2>';
     d.checks.forEach(c => {
       h += '<div class="check">' + esc(c.text);
-      if (c.type === 'inspector') {
-        h += c.done ? '<div class="muted">回答済み</div>'
-          : '<div><button onclick="answer(1)">はい</button><button class="sec" onclick="answer(0)">違う</button></div>';
-      }
-      if (c.type === 'fullname') {
-        h += c.done ? '<div class="muted">回答済み</div>'
-          : '<div><input id="fullname" placeholder="例：山田 太郎" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;width:60%;background:var(--card);color:var(--ink)"><button onclick="answerName()">送る</button></div>';
-      }
+      if (c.type === 'inspector') h += c.done ? '<div class="muted">回答済み</div>' : '<div><button onclick="answer(1)">はい</button><button class="sec" onclick="answer(0)">違う</button></div>';
+      if (c.type === 'fullname') h += c.done ? '<div class="muted">回答済み</div>' : '<div><input id="fullname" placeholder="例：山田 太郎" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;width:60%;background:var(--card);color:var(--ink)"><button onclick="answerName()">送る</button></div>';
       h += '</div>';
     });
   }
-  h += '<h2 style="font-size:16px;margin:16px 0 8px">読み取った指摘（' + d.shiteki.length + '件）</h2>';
-  d.shiteki.forEach(s => {
-    const tags = '<span class="tag' + (s.kind === '特記' ? ' warn' : '') + '">' + esc(s.kind) + '</span>'
-      + (s.ask ? '<span class="tag warn">要確認</span>' : '')
-      + (s.places > 1 ? '<span class="tag">' + esc(s.places) + 'か所</span>' : '')
-      + (s.common ? '<span class="tag warn">共通</span>' : '')
-      + (s.severe ? '<span class="tag warn">重大</span>' : '')
-      + (s.cancelled ? '<span class="tag">取消</span>' : '');
-    const text = s.cancelled ? '<s>' + esc(s.text) + '</s>' : esc(s.text);
-    h += '<div class="issue"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
-      + '<div class="t">' + text + '</div>'
-      + (s.item ? '<div class="muted">項目：' + esc(s.item) + '</div>' : '')
-      + (s.place ? '<div class="muted">場所：' + esc(s.place) + '</div>' : '')
-      + (d.editable ? '<button class="sec small" onclick="toggleEdit(\'' + esc(s.id) + '\')">直す</button>' + editor(s, d.items) : '')
-      + '</div>';
-  });
-  h += '<p class="muted" style="margin-top:12px">写真の貼り付け・承認依頼は、次の版で付けます。</p>';
+  h += '<h2>読み取った指摘（' + d.shiteki.length + '件）</h2>';
+  d.shiteki.forEach(s => { h += issueHtml(s); });
+  adds.forEach((a, i) => { h += addedHtml(a, i); });
+  if (d.editable) {
+    h += '<div style="margin-top:12px"><button class="sec" onclick="toggle(\'new\')">＋ 指摘を追加（記録書にないもの）</button>' + newForm() + '</div>';
+  }
+  h += '<p class="muted" style="margin-top:12px">直したところは「保存する」を押すまで送りません。写真の貼り付け・承認依頼は、次の版で付けます。</p>';
   app.innerHTML = h;
+  updateBar();
 }
 
-async function load() { app.textContent = '読み込み中…'; try { render(await call()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
-function editor(s, items) {
-  const kinds = ['指摘', '未施工', '申し送り', '特記'];
-  const ko = kinds.map(k => '<option' + (k === s.kind ? ' selected' : '') + '>' + k + '</option>').join('');
-  const io = '<option value="">（項目なし）</option>' + items.map(i => '<option value="' + esc(i.id) + '"' + (i.id === s.itemId ? ' selected' : '') + '>' + esc(i.name) + '</option>').join('');
+function issueHtml(s) {
+  const p = pend[s.id] || {};
+  const v = { kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), cancel: p.cancel ?? s.cancelled };
+  const changed = !!pend[s.id];
+  const plLabel = (PLACES.find(x => x[0] === v.places) || PLACES[0])[1];
+  const how = s.method === '追記' ? '<span class="tag acc">追記</span>'
+    : (s.method === '予測→修正' ? '<span class="tag acc">修正済</span>' : (s.conf ? '<span class="tag">AI予測・自信' + esc(s.conf) + '</span>' : ''));
+  const tags = '<span class="tag' + (v.kind === '特記' ? ' warn' : '') + '">' + esc(v.kind) + '</span>'
+    + (s.ask ? '<span class="tag warn">要確認</span>' : '')
+    + (v.places !== '1' ? '<span class="tag' + (v.places === '3+' ? ' warn' : '') + '">' + esc(plLabel) + '</span>' : '')
+    + (s.severe ? '<span class="tag warn">重大</span>' : '')
+    + (v.cancel ? '<span class="tag">取消</span>' : '')
+    + (changed ? '<span class="tag acc">未保存</span>' : '');
+  const text = v.cancel ? '<s>' + esc(s.text) + '</s>' : esc(s.text);
   const k = esc(s.id);
-  return '<div class="edit" id="ed-' + k + '">'
-    + '<label>種別</label><select id="kind-' + k + '">' + ko + '</select>'
-    + '<label>項目</label><select id="item-' + k + '">' + io + '</select>'
-    + '<label>か所数</label><input type="number" min="1" max="99" id="places-' + k + '" value="' + esc(s.places || 1) + '">'
-    + '<label><input type="checkbox" id="cancel-' + k + '"' + (s.cancelled ? ' checked' : '') + '> 取消（この指摘は数えない）</label>'
-    + '<button onclick="saveEdit(\'' + k + '\')">保存</button><button class="sec" onclick="toggleEdit(\'' + k + '\')">やめる</button></div>';
+  let h = '<div class="issue' + (changed ? ' changed' : '') + '"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
+    + '<div class="t">' + text + '</div>'
+    + '<div class="muted">項目：' + (esc(itemName(v.item)) || '（なし）') + ' ' + how + '</div>'
+    + '<div class="muted">是正：' + (esc(v.fix) || '（なし）') + '</div>'
+    + (s.place ? '<div class="muted">場所：' + esc(s.place) + '</div>' : '');
+  if (last.editable) {
+    h += '<button class="sec small" onclick="toggle(\'' + k + '\')">直す</button>'
+      + '<div class="edit" id="ed-' + k + '">'
+      + '<label>種別</label><select onchange="setp(\'' + k + '\',\'kind\',this.value)">' + opts(KINDS.map(x => [x, x]), v.kind) + '</select>'
+      + '<label>項目</label><select onchange="setp(\'' + k + '\',\'item\',this.value)">' + itemOpts(v.item) + '</select>'
+      + '<label>か所数</label><select onchange="setp(\'' + k + '\',\'places\',this.value)">' + opts(PLACES, v.places) + '</select>'
+      + '<label>是正指示</label><input type="text" value="' + esc(v.fix) + '" onchange="setp(\'' + k + '\',\'fix\',this.value)">'
+      + '<label><input type="checkbox"' + (v.cancel ? ' checked' : '') + ' onchange="setp(\'' + k + '\',\'cancel\',this.checked)"> 取消（この指摘は数えない）</label>'
+      + '</div>';
+  }
+  return h + '</div>';
 }
-function toggleEdit(id) { const e = document.getElementById('ed-' + id); if (e) e.classList.toggle('open'); }
-async function saveEdit(id) {
-  const g = n => document.getElementById(n + '-' + id);
-  const ex = { a: 'edit', id: id, kind: g('kind').value, item: g('item').value, places: String(g('places').value || 1), cancel: g('cancel').checked ? '1' : '0' };
-  app.textContent = '保存中…'; try { render(await call(ex)); } catch (e) { load(); }
+
+function addedHtml(a, i) {
+  const plLabel = (PLACES.find(x => x[0] === a.places) || PLACES[0])[1];
+  return '<div class="issue changed"><div><span class="tag acc">追記</span><span class="tag">' + esc(a.kind) + '</span><span class="tag">' + esc(plLabel) + '</span><span class="tag acc">未保存</span></div>'
+    + '<div class="t">' + esc(a.text) + '</div>'
+    + '<div class="muted">項目：' + (esc(itemName(a.item)) || '（なし）') + '</div>'
+    + '<div class="muted">是正：' + (esc(a.fix) || '（なし）') + '</div>'
+    + (a.place ? '<div class="muted">場所：' + esc(a.place) + '</div>' : '')
+    + '<button class="sec small" onclick="removeAdd(' + i + ')">追記をやめる</button></div>';
 }
+
+function newForm() {
+  return '<div class="edit" id="ed-new">'
+    + '<label>指摘の内容（必須）</label><input type="text" id="n-text">'
+    + '<label>場所</label><input type="text" id="n-place">'
+    + '<label>種別</label><select id="n-kind">' + opts(KINDS.map(x => [x, x]), '指摘') + '</select>'
+    + '<label>項目</label><select id="n-item">' + itemOpts('') + '</select>'
+    + '<label>か所数</label><select id="n-places">' + opts(PLACES, '1') + '</select>'
+    + '<label>是正指示</label><input type="text" id="n-fix">'
+    + '<button onclick="addNew()">一覧に加える</button><span class="muted">（最後に「保存する」で送ります）</span></div>';
+}
+
+function toggle(id) { const e = document.getElementById('ed-' + id); if (e) e.classList.toggle('open'); }
+function setp(id, key, val) {
+  const s = last.shiteki.find(x => x.id === id); if (!s) return;
+  pend[id] = Object.assign(pend[id] || {}, { [key]: val });
+  // 元と同じに戻したら未保存から外す
+  const p = pend[id], same = (p.kind ?? s.kind) === s.kind && (p.item ?? s.itemId) === s.itemId && (p.places ?? placesKey(s)) === placesKey(s)
+    && (p.fix ?? (s.fix || '')) === (s.fix || '') && (p.cancel ?? s.cancelled) === s.cancelled;
+  if (same) delete pend[id];
+  rerender(id);
+}
+function rerender(openId) { const y = window.scrollY; render(last); if (openId) toggle(openId); window.scrollTo(0, y); }
+function addNew() {
+  const g = n => document.getElementById('n-' + n).value;
+  if (!g('text').trim()) { const p = document.createElement('p'); p.className = 'err'; p.textContent = '指摘の内容を入れてください。'; document.getElementById('ed-new').prepend(p); return; }
+  adds.push({ text: g('text').trim(), place: g('place').trim(), kind: g('kind'), item: g('item'), places: g('places'), fix: g('fix').trim() });
+  rerender();
+}
+function removeAdd(i) { adds.splice(i, 1); rerender(); }
+function discard() { pend = {}; adds = []; rerender(); }
+function updateBar() {
+  const n = Object.keys(pend).length + adds.length;
+  document.getElementById('bar').classList.toggle('show', n > 0);
+  document.getElementById('barText').textContent = '未保存の変更 ' + n + '件';
+}
+async function saveAll() {
+  const edits = Object.keys(pend).map(id => {
+    const s = last.shiteki.find(x => x.id === id), p = pend[id];
+    return { id: id, kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), cancel: p.cancel ?? s.cancelled };
+  });
+  document.getElementById('barText').textContent = '保存中…';
+  try {
+    const d = await postData({ a: 'save', edits: edits, adds: adds });
+    if (d.ok) { pend = {}; adds = []; const y = window.scrollY; render(d); window.scrollTo(0, y); }
+    else { document.getElementById('barText').textContent = d.error || '保存できませんでした。'; }
+  } catch (e) { document.getElementById('barText').textContent = '保存できませんでした。もう一度「保存する」を押してください。'; }
+}
+
+async function load() { app.textContent = '読み込み中…'; try { render(await getData()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
+async function answer(ok) { app.textContent = '送信中…'; try { render(await getData({ a: 'inspector', ok: ok })); } catch (e) { load(); } }
 async function answerName() {
   const v = (document.getElementById('fullname') || {}).value || '';
   if (!v.trim()) return;
-  app.textContent = '送信中…'; try { render(await call({ a: 'fullname', name: v.trim() })); } catch (e) { load(); }
+  app.textContent = '送信中…'; try { render(await getData({ a: 'fullname', name: v.trim() })); } catch (e) { load(); }
 }
-async function answer(ok) { app.textContent = '送信中…'; try { render(await call({ a: 'inspector', ok: ok })); } catch (e) { load(); } }
 
 liff.init({ liffId: LIFF_ID }).then(() => {
   if (!liff.isLoggedIn()) { liff.login(); return; }
