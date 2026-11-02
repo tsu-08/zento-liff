@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v6 2026-11-02（v5 から：保存したことが分かるよう、保存後に「✓ 保存しました」を出し、保存した指摘に「保存済」を付ける）
+<!-- 全棟品質評価 確認画面（LIFF）v7 2026-11-02（v6 から：保存中は画面を薄くして操作できないようにする。保存中の誤操作で直しが消えないようにする）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -43,6 +43,8 @@
   .bar .in { max-width:560px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .bar button { margin:0 0 0 6px; }
 .tag.ok{background:#E3F4EA;color:#1E7A45;border-color:#1E7A45}
+body.saving #app{opacity:.4;pointer-events:none}
+body.saving #bar{background:#FFF4D6}
 </style>
 </head>
 <body>
@@ -217,7 +219,10 @@ async function saveAll() {
     const s = last.shiteki.find(x => x.id === id), p = pend[id];
     return { id: id, kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled };
   });
-  document.getElementById('barText').textContent = '保存中…';
+  if (document.body.classList.contains('saving')) return;
+  document.body.classList.add('saving');
+  document.getElementById('barText').textContent = '保存中…（終わるまでお待ちください）';
+  document.querySelectorAll('#bar button').forEach(b => { b.style.display = 'none'; });
   try {
     const d = await postData({ a: 'save', edits: edits, adds: adds });
     if (d.ok) {
@@ -230,6 +235,7 @@ async function saveAll() {
     }
     else { document.getElementById('barText').textContent = d.error || '保存できませんでした。'; }
   } catch (e) { document.getElementById('barText').textContent = '保存できませんでした。もう一度「保存する」を押してください。'; }
+  finally { document.body.classList.remove('saving'); if (Object.keys(pend).length + adds.length) document.querySelectorAll('#bar button').forEach(b => { b.style.display = ''; }); }
 }
 
 async function load() { app.textContent = '読み込み中…'; try { render(await getData()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
