@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v7 2026-11-02（v6 から：保存中は画面を薄くして操作できないようにする。保存中の誤操作で直しが消えないようにする）
+<!-- 全棟品質評価 確認画面（LIFF）v8 2026-11-02（v7 から：保存ボタンをやめ、直すたびに自動で保存（裏で送る。送っている間も作業を続けられる）。閉じるときに送りきれていない分を送る）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -43,8 +43,6 @@
   .bar .in { max-width:560px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .bar button { margin:0 0 0 6px; }
 .tag.ok{background:#E3F4EA;color:#1E7A45;border-color:#1E7A45}
-body.saving #app{opacity:.4;pointer-events:none}
-body.saving #bar{background:#FFF4D6}
 </style>
 </head>
 <body>
@@ -53,7 +51,7 @@ body.saving #bar{background:#FFF4D6}
   <div id="app" class="card">読み込み中…</div>
   <p class="muted">この画面はLINEのボタンから開いた本人だけが見られます。リンクを他の人に送っても開けません。</p>
 </main>
-<div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" onclick="discard()">取り消す</button><button onclick="saveAll()">保存する</button></span></div></div>
+<div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" id="retryBtn" onclick="flush()" style="display:none">もう一度送る</button></span></div></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 // ===== 設定（鍵ではない。公開されても困らない値だけ） =====
@@ -69,6 +67,8 @@ const PLACES = [['1', '1か所'], ['2', '2か所'], ['3+', '3か所以上（共�
 let last = null;          // 最後に受け取った内容
 let savedIds = new Set(); // この画面で保存した指摘
 let savedMsg = '';         // 保存直後に下に出す文
+let sending = false, failed = false, timer = null, renderLater = false, savedAt = '';
+const openSet = new Set();   // 開いている「直す」欄
 let pend = {};            // 直したが未保存のもの { 指摘ID: {kind,item,places,fix,cancel} }
 let adds = [];            // 追記したが未保存のもの
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -120,8 +120,9 @@ function render(d) {
   if (d.editable) {
     h += '<div style="margin-top:12px"><button class="sec" onclick="toggle(\'new\')">＋ 指摘を追加（記録書にないもの）</button>' + newForm() + '</div>';
   }
-  h += '<p class="muted" style="margin-top:12px">直したところは「保存する」を押すまで送りません。写真の貼り付け・承認依頼は、次の版で付けます。</p>';
+  h += '<p class="muted" style="margin-top:12px">直したところは数秒後に自動で保存します（送っている間も作業を続けられます）。閉じたときに送りきれていない分も送ります。写真の貼り付け・承認依頼は、次の版で付けます。</p>';
   app.innerHTML = h;
+  openSet.forEach(id => { const e = document.getElementById('ed-' + id); if (e) e.classList.add('open'); });
   updateBar();
 }
 
@@ -137,7 +138,7 @@ function issueHtml(s) {
     + (v.places !== '1' ? '<span class="tag' + (v.places === '3+' ? ' warn' : '') + '">' + esc(plLabel) + '</span>' : '')
     + (s.severe ? '<span class="tag warn">重大</span>' : '')
     + (v.cancel ? '<span class="tag">取消</span>' : '')
-    + (changed ? '<span class="tag acc">未保存</span>' : (savedIds.has(s.id) ? '<span class="tag ok">保存済</span>' : ''));
+    + (changed ? '<span class="tag acc">保存待ち</span>' : (savedIds.has(s.id) ? '<span class="tag ok">保存済</span>' : ''));
   const text = v.cancel ? '<s>' + esc(s.text) + '</s>' : esc(s.text);
   const k = esc(s.id);
   let h = '<div class="issue' + (changed ? ' changed' : '') + '"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
@@ -152,7 +153,7 @@ function issueHtml(s) {
       + '<label>項目</label><select onchange="setp(\'' + k + '\',\'item\',this.value)">' + itemOpts(v.item) + '</select>'
       + '<label>か所数</label><select onchange="setp(\'' + k + '\',\'places\',this.value)">' + opts(PLACES, v.places) + '</select>'
       + fixOpts(v.item, v.kz).replace('pickFix(this)', 'pickFix(this,\'' + k + '\')')
-      + '<label>是正指示</label><input type="text" value="' + esc(v.fix) + '" onchange="setp(\'' + k + '\',\'fix\',this.value)">'
+      + '<label>是正指示</label><input type="text" value="' + esc(v.fix) + '" onchange="setp(\'' + k + '\',\'fix\',this.value)" oninput="setq(\'' + k + '\',\'fix\',this.value)">'
       + '<label><input type="checkbox"' + (v.cancel ? ' checked' : '') + ' onchange="setp(\'' + k + '\',\'cancel\',this.checked)"> 取消（この指摘は数えない）</label>'
       + '</div>';
   }
@@ -161,7 +162,7 @@ function issueHtml(s) {
 
 function addedHtml(a, i) {
   const plLabel = (PLACES.find(x => x[0] === a.places) || PLACES[0])[1];
-  return '<div class="issue changed"><div><span class="tag acc">追記</span><span class="tag">' + esc(a.kind) + '</span><span class="tag">' + esc(plLabel) + '</span><span class="tag acc">未保存</span></div>'
+  return '<div class="issue changed"><div><span class="tag acc">追記</span><span class="tag">' + esc(a.kind) + '</span><span class="tag">' + esc(plLabel) + '</span><span class="tag acc">保存待ち</span></div>'
     + '<div class="t">' + esc(a.text) + '</div>'
     + '<div class="muted">項目：' + (esc(itemName(a.item)) || '（なし）') + '</div>'
     + '<div class="muted">是正：' + (esc(a.fix) || '（なし）') + '</div>'
@@ -178,7 +179,7 @@ function newForm() {
     + '<div id="n-fixsel"></div>'
     + '<label>か所数</label><select id="n-places">' + opts(PLACES, '1') + '</select>'
     + '<label>是正指示</label><input type="text" id="n-fix">'
-    + '<button onclick="addNew()">一覧に加える</button><span class="muted">（最後に「保存する」で送ります）</span></div>';
+    + '<button onclick="addNew()">一覧に加える</button><span class="muted">（加えると自動で保存します）</span></div>';
 }
 
 function pickFix(sel, id) {
@@ -187,7 +188,7 @@ function pickFix(sel, id) {
   document.getElementById('n-kz').value = sel.value; if (x) document.getElementById('n-fix').value = x.how;
 }
 function newItem(item) { document.getElementById('n-fixsel').innerHTML = fixOpts(item, '') + '<input type="hidden" id="n-kz" value="">'; }
-function toggle(id) { const e = document.getElementById('ed-' + id); if (e) e.classList.toggle('open'); }
+function toggle(id) { const e = document.getElementById('ed-' + id); if (!e) return; e.classList.toggle('open'); if (e.classList.contains('open')) openSet.add(id); else openSet.delete(id); }
 function setp(id, key, val) {
   const s = last.shiteki.find(x => x.id === id); if (!s) return;
   pend[id] = Object.assign(pend[id] || {}, { [key]: val });
@@ -196,47 +197,83 @@ function setp(id, key, val) {
   const p = pend[id], same = (p.kind ?? s.kind) === s.kind && (p.item ?? s.itemId) === s.itemId && (p.places ?? placesKey(s)) === placesKey(s)
     && (p.fix ?? (s.fix || '')) === (s.fix || '') && (p.kz ?? (s.kz || '')) === (s.kz || '') && (p.cancel ?? s.cancelled) === s.cancelled;
   if (same) delete pend[id];
-  rerender(id);
+  rerender();
+  schedule();
 }
-function rerender(openId) { const y = window.scrollY; render(last); if (openId) toggle(openId); window.scrollTo(0, y); }
+// 入力中の文字：画面は書き換えず、入力が止まってから送る
+function setq(id, key, val) {
+  const s = last.shiteki.find(x => x.id === id); if (!s) return;
+  pend[id] = Object.assign(pend[id] || {}, { [key]: val });
+  schedule(2500);
+}
+function rerender() { const y = window.scrollY; render(last); window.scrollTo(0, y); }
 function addNew() {
   const g = n => document.getElementById('n-' + n).value;
   if (!g('text').trim()) { const p = document.createElement('p'); p.className = 'err'; p.textContent = '指摘の内容を入れてください。'; document.getElementById('ed-new').prepend(p); return; }
   const kzEl = document.getElementById('n-kz');
   adds.push({ text: g('text').trim(), place: g('place').trim(), kind: g('kind'), item: g('item'), places: g('places'), fix: g('fix').trim(), kz: kzEl ? kzEl.value : '' });
+  openSet.delete('new');
   rerender();
+  schedule(300);
 }
 function removeAdd(i) { adds.splice(i, 1); rerender(); }
 function discard() { pend = {}; adds = []; rerender(); }
 function updateBar() {
   const n = Object.keys(pend).length + adds.length;
-  document.getElementById('bar').classList.toggle('show', n > 0 || !!savedMsg);
-  document.getElementById('barText').textContent = n > 0 ? '未保存の変更 ' + n + '件' : savedMsg;
-  document.querySelectorAll('#bar button').forEach(b => { b.style.display = n > 0 ? '' : 'none'; });
+  const text = failed ? '保存できませんでした（' + n + '件）。電波のよい所で「もう一度送る」を押してください。'
+    : sending ? '保存中…（このまま作業を続けられます）'
+    : n ? '保存待ち ' + n + '件（数秒後に自動で保存）'
+    : savedAt ? '✓ 保存しました（' + savedAt + '）' : '';
+  document.getElementById('bar').classList.toggle('show', !!text);
+  document.getElementById('barText').textContent = text;
+  document.getElementById('retryBtn').style.display = failed ? '' : 'none';
 }
-async function saveAll() {
+function snapshot() {
   const edits = Object.keys(pend).map(id => {
     const s = last.shiteki.find(x => x.id === id), p = pend[id];
     return { id: id, kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled };
   });
-  if (document.body.classList.contains('saving')) return;
-  document.body.classList.add('saving');
-  document.getElementById('barText').textContent = '保存中…（終わるまでお待ちください）';
-  document.querySelectorAll('#bar button').forEach(b => { b.style.display = 'none'; });
-  try {
-    const d = await postData({ a: 'save', edits: edits, adds: adds });
-    if (d.ok) {
-      edits.forEach(e => savedIds.add(e.id));
-      (d.shiteki || []).filter(x => x.method === '追記').forEach(x => savedIds.add(x.id));
-      pend = {}; adds = [];
-      savedMsg = '✓ ' + (d.answer || '保存しました。');
-      const y = window.scrollY; render(d); window.scrollTo(0, y);
-      setTimeout(() => { savedMsg = ''; updateBar(); }, 6000);
-    }
-    else { document.getElementById('barText').textContent = d.error || '保存できませんでした。'; }
-  } catch (e) { document.getElementById('barText').textContent = '保存できませんでした。もう一度「保存する」を押してください。'; }
-  finally { document.body.classList.remove('saving'); if (Object.keys(pend).length + adds.length) document.querySelectorAll('#bar button').forEach(b => { b.style.display = ''; }); }
+  return { edits: edits, adds: adds.slice() };
 }
+function schedule(ms) { clearTimeout(timer); timer = setTimeout(flush, ms ?? 1500); updateBar(); }
+// 裏で送る。送っている間に直したものは、次の回に送る
+async function flush() {
+  clearTimeout(timer);
+  if (sending) { timer = setTimeout(flush, 800); return; }
+  if (!(Object.keys(pend).length + adds.length)) { updateBar(); return; }
+  const snap = snapshot(), sentP = JSON.parse(JSON.stringify(pend));
+  sending = true; failed = false; updateBar();
+  try {
+    const d = await postData({ a: 'save', edits: snap.edits, adds: snap.adds });
+    if (!d.ok) throw new Error(d.error || '');
+    snap.edits.forEach(e => { savedIds.add(e.id); if (JSON.stringify(pend[e.id]) === JSON.stringify(sentP[e.id])) delete pend[e.id]; });
+    adds = adds.filter(a => !snap.adds.includes(a));
+    (d.shiteki || []).filter(x => x.method === '追記').forEach(x => savedIds.add(x.id));
+    savedAt = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    d.answer = '';
+    sending = false;
+    applyData(d);
+  } catch (e) { sending = false; failed = true; }
+  updateBar();
+  if (!failed && Object.keys(pend).length + adds.length) schedule();
+}
+const saveAll = flush;
+// 文字を入力している最中は画面を書き換えない（入力が終わってから反映）
+function typing() { const a = document.activeElement; return a && app.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
+function applyData(d) { if (typing()) { last = d; renderLater = true; return; } const y = window.scrollY; render(d); window.scrollTo(0, y); }
+document.addEventListener('focusout', () => { if (renderLater) setTimeout(() => { if (!typing() && renderLater) { renderLater = false; rerender(); } }, 0); });
+// 閉じる・アプリを切り替えるときに、送りきれていない分を送る
+function flushOnClose() {
+  if (!last || !(Object.keys(pend).length + adds.length)) return;
+  const snap = snapshot();
+  try {
+    fetch(API_URL, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ liff: true, t: liff.getIDToken(), f: fileId, s: sessionStart, a: 'save', edits: snap.edits, adds: snap.adds }) });
+    pend = {}; adds = [];
+  } catch (e) { }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnClose(); });
+window.addEventListener('pagehide', flushOnClose);
 
 async function load() { app.textContent = '読み込み中…'; try { render(await getData()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
 async function answer(ok) { app.textContent = '送信中…'; try { render(await getData({ a: 'inspector', ok: ok })); } catch (e) { load(); } }
