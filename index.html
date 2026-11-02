@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v5 2026-10-29（v4 から：登録の是正指示（30 の改善策）から選べる、是正指示の元（記録書・登録・AI案）を表示）
+<!-- 全棟品質評価 確認画面（LIFF）v6 2026-11-02（v5 から：保存したことが分かるよう、保存後に「✓ 保存しました」を出し、保存した指摘に「保存済」を付ける）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -42,6 +42,7 @@
   .bar.show { display:block; }
   .bar .in { max-width:560px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .bar button { margin:0 0 0 6px; }
+.tag.ok{background:#E3F4EA;color:#1E7A45;border-color:#1E7A45}
 </style>
 </head>
 <body>
@@ -64,6 +65,8 @@ const sessionStart = Date.now();   // 手直しの時間の記録用（画面を
 const KINDS = ['指摘', '未施工', '申し送り', '特記'];
 const PLACES = [['1', '1か所'], ['2', '2か所'], ['3+', '3か所以上（共通）']];
 let last = null;          // 最後に受け取った内容
+let savedIds = new Set(); // この画面で保存した指摘
+let savedMsg = '';         // 保存直後に下に出す文
 let pend = {};            // 直したが未保存のもの { 指摘ID: {kind,item,places,fix,cancel} }
 let adds = [];            // 追記したが未保存のもの
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -132,7 +135,7 @@ function issueHtml(s) {
     + (v.places !== '1' ? '<span class="tag' + (v.places === '3+' ? ' warn' : '') + '">' + esc(plLabel) + '</span>' : '')
     + (s.severe ? '<span class="tag warn">重大</span>' : '')
     + (v.cancel ? '<span class="tag">取消</span>' : '')
-    + (changed ? '<span class="tag acc">未保存</span>' : '');
+    + (changed ? '<span class="tag acc">未保存</span>' : (savedIds.has(s.id) ? '<span class="tag ok">保存済</span>' : ''));
   const text = v.cancel ? '<s>' + esc(s.text) + '</s>' : esc(s.text);
   const k = esc(s.id);
   let h = '<div class="issue' + (changed ? ' changed' : '') + '"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
@@ -205,8 +208,9 @@ function removeAdd(i) { adds.splice(i, 1); rerender(); }
 function discard() { pend = {}; adds = []; rerender(); }
 function updateBar() {
   const n = Object.keys(pend).length + adds.length;
-  document.getElementById('bar').classList.toggle('show', n > 0);
-  document.getElementById('barText').textContent = '未保存の変更 ' + n + '件';
+  document.getElementById('bar').classList.toggle('show', n > 0 || !!savedMsg);
+  document.getElementById('barText').textContent = n > 0 ? '未保存の変更 ' + n + '件' : savedMsg;
+  document.querySelectorAll('#bar button').forEach(b => { b.style.display = n > 0 ? '' : 'none'; });
 }
 async function saveAll() {
   const edits = Object.keys(pend).map(id => {
@@ -216,7 +220,14 @@ async function saveAll() {
   document.getElementById('barText').textContent = '保存中…';
   try {
     const d = await postData({ a: 'save', edits: edits, adds: adds });
-    if (d.ok) { pend = {}; adds = []; const y = window.scrollY; render(d); window.scrollTo(0, y); }
+    if (d.ok) {
+      edits.forEach(e => savedIds.add(e.id));
+      (d.shiteki || []).filter(x => x.method === '追記').forEach(x => savedIds.add(x.id));
+      pend = {}; adds = [];
+      savedMsg = '✓ ' + (d.answer || '保存しました。');
+      const y = window.scrollY; render(d); window.scrollTo(0, y);
+      setTimeout(() => { savedMsg = ''; updateBar(); }, 6000);
+    }
     else { document.getElementById('barText').textContent = d.error || '保存できませんでした。'; }
   } catch (e) { document.getElementById('barText').textContent = '保存できませんでした。もう一度「保存する」を押してください。'; }
 }
