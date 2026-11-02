@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v9 2026-11-02（v8 から：指摘ごとに「写真を貼る」。画面で縮小して1枚ずつ裏で送る。貼った写真は小さく表示し、×で外せる）
+<!-- 全棟品質評価 確認画面（LIFF）v10 2026-11-02（v9 から：写真をまとめて追加→AIが指摘に仮振り分け、決められないものは未割当。写真を押して選び、指摘・未割当・好例へ移せる。好例は好例欄に直接貼るか未割当から移す。見出し・項目は任意）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -50,6 +50,13 @@
 .phx{position:absolute;top:0;right:0;margin:0;padding:0 7px;font-size:14px;line-height:22px;border-radius:0 0 0 6px;background:rgba(0,0,0,.55);border:none;color:#fff}
 .phs{position:absolute;bottom:0;left:0;right:0;font-size:11px;text-align:center;background:rgba(255,255,255,.85);color:#333}
 .phadd{display:inline-block;font-size:13px;color:var(--acc);border:1px dashed var(--acc);border-radius:8px;padding:6px 10px;cursor:pointer}
+.ph{cursor:pointer}
+.ph.sel{outline:3px solid var(--acc);outline-offset:-3px}
+.phai{position:absolute;left:0;top:0;font-size:10px;line-height:16px;background:var(--acc);color:#fff;padding:0 4px;border-radius:0 0 6px 0}
+.tray{border:1px dashed var(--line);border-radius:8px;padding:8px;margin-bottom:8px}
+.goodrow{display:flex;gap:6px;align-items:center;margin-top:6px}
+.goodrow img{width:40px;height:40px;object-fit:cover;border-radius:4px;flex:none}
+.goodrow input,.goodrow select{flex:1;min-width:0;font:inherit;font-size:13px;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
 </style>
 </head>
 <body>
@@ -123,12 +130,14 @@ function render(d) {
     });
   }
   h += '<h2>読み取った指摘（' + d.shiteki.length + '件）</h2>';
+  h += trayHtml();
   d.shiteki.forEach(s => { h += issueHtml(s); });
   adds.forEach((a, i) => { h += addedHtml(a, i); });
   if (d.editable) {
     h += '<div style="margin-top:12px"><button class="sec" onclick="toggle(\'new\')">＋ 指摘を追加（記録書にないもの）</button>' + newForm() + '</div>';
   }
-  h += '<p class="muted" style="margin-top:12px">直したところは数秒後に自動で保存します（送っている間も作業を続けられます）。閉じたときに送りきれていない分も送ります。写真は指摘ごとの「📷 写真を貼る」から（画面で縮小して送ります）。承認依頼は次の版で付けます。</p>';
+  h += goodHtml();
+  h += '<p class="muted" style="margin-top:12px">直したところは数秒後に自動で保存します（送っている間も作業を続けられます）。閉じたときに送りきれていない分も送ります。写真は「まとめて追加」でAIが指摘に振り分けます（違うものは写真を押して付け替え）。指摘ごとの「写真を貼る」でも貼れます。承認依頼は次の版で付けます。</p>';
   app.innerHTML = h;
   openSet.forEach(id => { const e = document.getElementById('ed-' + id); if (e) e.classList.add('open'); });
   updateBar();
@@ -231,9 +240,11 @@ function updateBar() {
   const n = Object.keys(pend).length + adds.length;
   const text = upFailed ? '写真を送れませんでした（残り' + upq.length + '枚）。電波のよい所で「もう一度送る」を押してください。'
     : failed ? '保存できませんでした（' + n + '件）。電波のよい所で「もう一度送る」を押してください。'
+    : assigning ? 'AIが写真を指摘に振り分け中…（作業は続けられます）'
     : upq.length ? '写真を送信中 残り' + upq.length + '枚…（作業は続けられます。送り終わるまで閉じないでください）'
     : sending ? '保存中…（このまま作業を続けられます）'
     : n ? '保存待ち ' + n + '件（数秒後に自動で保存）'
+    : photoMsg ? photoMsg
     : savedAt ? '✓ 保存しました（' + savedAt + '）' : '';
   document.getElementById('bar').classList.toggle('show', !!text);
   document.getElementById('barText').textContent = text;
@@ -290,16 +301,42 @@ function flushOnClose() {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushOnClose(); });
 window.addEventListener('pagehide', flushOnClose);
 
-// ===== 写真（指摘ごと） =====
-function photoHtml(sid) {
-  const list = (last.photos || []).filter(x => x.sid === sid);
-  const up = upq.filter(x => x.sid === sid);
+// ===== 写真 =====
+// 貼る先：指摘ID／''（未割当。まとめて追加した写真はAIが指摘に振り分ける）／'__good'（好例。AIは振り分けない）
+let selPh = new Set(), assigning = false, photoMsg = '', newUnassigned = 0;
+function img64(b) { return b ? '<img alt="" src="data:image/jpeg;base64,' + b + '">' : ''; }
+function tile(x) {
+  return '<span class="ph' + (selPh.has(x.id) ? ' sel' : '') + '" onclick="pickPh(\'' + esc(x.id) + '\')">' + img64(x.thumb)
+    + (x.how === 'AI仮振り分け' ? '<span class="phai">AI</span>' : '')
+    + (last.editable ? '<button class="phx" onclick="event.stopPropagation();delPhoto(\'' + esc(x.id) + '\')">×</button>' : '') + '</span>';
+}
+function upTile(x) { return '<span class="ph up">' + img64(x.thumb) + '<span class="phs">送信待ち</span></span>'; }
+function addBtn(to, label) { return last.editable ? '<label class="phadd">' + label + '<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotos(\'' + to + '\', this)"></label>' : ''; }
+function moveBtn(to, label) { return (last.editable && selPh.size) ? '<button class="small" onclick="movePhotos(\'' + to + '\')">' + label + '（' + selPh.size + '枚）</button>' : ''; }
+function photosWhere(f) { return (last.photos || []).filter(f); }
+function photoHtml(sid) {   // 指摘の下
+  const list = photosWhere(x => !x.good && x.sid === sid), up = upq.filter(x => x.sid === sid);
   if (!list.length && !up.length && !last.editable) return '';
-  let h = '<div class="photos">';
-  list.forEach(x => { h += '<span class="ph">' + (x.thumb ? '<img alt="" src="data:image/jpeg;base64,' + x.thumb + '">' : '') + (last.editable ? '<button class="phx" onclick="delPhoto(\'' + esc(x.id) + '\')">×</button>' : '') + '</span>'; });
-  up.forEach(x => { h += '<span class="ph up">' + (x.thumb ? '<img alt="" src="data:image/jpeg;base64,' + x.thumb + '">' : '') + '<span class="phs">送信待ち</span></span>'; });
-  if (last.editable) h += '<label class="phadd">📷 写真を貼る<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotos(\'' + esc(sid) + '\', this)"></label>';
-  return h + '</div>';
+  return '<div class="photos">' + list.map(tile).join('') + up.map(upTile).join('') + addBtn(esc(sid), '📷 写真を貼る') + moveBtn(esc(sid), '選んだ写真をここへ') + '</div>';
+}
+function trayHtml() {       // まとめて追加・未割当
+  const list = photosWhere(x => !x.good && !x.sid), up = upq.filter(x => x.sid === '');
+  if (!list.length && !up.length && !last.editable) return '';
+  return '<div class="tray"><div class="muted">写真をまとめて追加すると、AIが指摘に振り分けます（「AI」の印）。決められなかった写真はここ（未割当）に残ります。'
+    + '写真を押して選び、指摘の「選んだ写真をここへ」で移せます。</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
+    + addBtn('', '📷 写真をまとめて追加') + moveBtn('', '未割当に戻す') + '</div></div>';
+}
+function goodHtml() {       // 好例（任意。報告書には載せない）
+  const list = photosWhere(x => x.good), up = upq.filter(x => x.sid === '__good');
+  if (!list.length && !up.length && !last.editable) return '';
+  let h = '<h2>好例写真（任意・報告書には載せません）</h2><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
+    + addBtn('__good', '📷 好例を貼る') + moveBtn('__good', '選んだ写真を好例へ') + '</div>';
+  list.forEach(x => {
+    const dis = last.editable ? '' : ' disabled';
+    h += '<div class="goodrow">' + img64(x.thumb) + '<input type="text" placeholder="見出し（任意）" value="' + esc(x.title) + '" onchange="setGood(\'' + esc(x.id) + '\',this.value,null)"' + dis + '>'
+      + '<select onchange="setGood(\'' + esc(x.id) + '\',null,this.value)"' + dis + '>' + itemOpts(x.item) + '</select></div>';
+  });
+  return h;
 }
 // 長辺 max px の JPEG にして base64 で返す（保存容量と通信を抑える）
 async function shrink(file, max, q) {
@@ -313,9 +350,9 @@ async function shrink(file, max, q) {
     return c.toDataURL('image/jpeg', q).split(',')[1];
   } finally { URL.revokeObjectURL(url); }
 }
-async function addPhotos(sid, input) {
+async function addPhotos(to, input) {
   const files = [...input.files]; input.value = '';
-  for (const f of files) { const thumb = await shrink(f, 200, 0.6).catch(() => ''); upq.push({ sid: sid, file: f, thumb: thumb, taken: f.lastModified || '' }); }
+  for (const f of files) { const thumb = await shrink(f, 200, 0.6).catch(() => ''); upq.push({ sid: to, file: f, thumb: thumb, taken: f.lastModified || '' }); }
   refreshSoon(); pumpUploads();
 }
 async function pumpUploads() {
@@ -325,14 +362,49 @@ async function pumpUploads() {
     const x = upq[0];
     try {
       const data = await shrink(x.file, 1600, 0.8);
-      const d = await postData({ a: 'photo', sid: x.sid, data: data, thumb: x.thumb, taken: x.taken });
+      const ai = x.sid === '' ? await shrink(x.file, 640, 0.6) : '';
+      const d = await postData({ a: 'photo', sid: x.sid, data: data, ai: ai, thumb: x.thumb, taken: x.taken });
       if (!d.ok) throw new Error(d.error || '');
       (last.photos = last.photos || []).push(d.photo);
+      if (x.sid === '') newUnassigned++;
       upq.shift();
     } catch (e) { upFailed = true; break; }
     updateBar(); refreshSoon();
   }
   upBusy = false; updateBar(); refreshSoon();
+  if (!upFailed && !upq.length && newUnassigned) runAssign();
+}
+function mergePhotos(list) {
+  const ids = new Set((list || []).map(x => x.id)), gone = new Set(removedPhotos);
+  return (list || []).filter(x => !gone.has(x.id)).concat(((last && last.photos) || []).filter(x => !ids.has(x.id) && !gone.has(x.id)));
+}
+function flashPhoto(msg) { photoMsg = msg; updateBar(); setTimeout(() => { photoMsg = ''; updateBar(); }, 10000); }
+async function runAssign() {
+  assigning = true; updateBar();
+  try {
+    const d = await postData({ a: 'photoAssign' });
+    if (!d.ok) throw new Error(d.error || '');
+    newUnassigned = 0;
+    last.photos = mergePhotos(d.photos);
+    const left = photosWhere(x => !x.good && !x.sid).length;
+    flashPhoto('AIが ' + d.assigned + '枚を指摘に振り分けました' + (left ? '（未割当 ' + left + '枚）' : '') + '。違うものは写真を押して付け替えてください');
+  } catch (e) { flashPhoto('AIの振り分けができませんでした。未割当の写真を押して、手で振り分けてください'); }
+  assigning = false; updateBar(); refreshSoon();
+}
+function pickPh(id) { if (!last.editable) return; if (selPh.has(id)) selPh.delete(id); else selPh.add(id); refreshSoon(); }
+async function movePhotos(to) {
+  const pids = [...selPh]; if (!pids.length) return;
+  const good = to === '__good';
+  photosWhere(x => pids.includes(x.id)).forEach(x => { x.good = good; x.sid = good ? '' : to; x.how = good ? '未割当から好例へ' : (to ? '確認画面で振り分け' : '未割当'); });
+  selPh.clear(); refreshSoon();
+  try { const d = await postData({ a: 'photoMove', pids: pids, to: to }); if (!d.ok) throw new Error(d.error || ''); last.photos = mergePhotos(d.photos); refreshSoon(); }
+  catch (e) { flashPhoto('写真を移せませんでした。開き直してもう一度お試しください'); }
+}
+async function setGood(pid, title, item) {
+  const x = photosWhere(p => p.id === pid)[0]; if (!x) return;
+  if (title !== null) x.title = title; if (item !== null) x.item = item;
+  try { const d = await postData({ a: 'photoGood', pid: pid, title: x.title, item: x.item }); if (!d.ok) throw new Error(d.error || ''); }
+  catch (e) { flashPhoto('好例の見出しを保存できませんでした。もう一度お試しください'); }
 }
 function refreshSoon() { if (typing()) { renderLater = true; return; } rerender(); }
 async function delPhoto(pid) {
@@ -340,12 +412,12 @@ async function delPhoto(pid) {
   try {
     const d = await postData({ a: 'photoDel', pid: pid });
     if (!d.ok) throw new Error(d.error || '');
-    removedPhotos.push(pid);
+    removedPhotos.push(pid); selPh.delete(pid);
     last.photos = (last.photos || []).filter(x => x.id !== pid);
     refreshSoon();
   } catch (e) { alert('外せませんでした。もう一度お試しください。'); }
 }
-function retryAll() { if (upq.length) pumpUploads(); if (failed) flush(); }
+function retryAll() { if (upq.length) pumpUploads(); else if (newUnassigned) runAssign(); if (failed) flush(); }
 
 async function load() { app.textContent = '読み込み中…'; try { render(await getData()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
 async function answer(ok) { app.textContent = '送信中…'; try { render(await getData({ a: 'inspector', ok: ok })); } catch (e) { load(); } }
