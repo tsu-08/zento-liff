@@ -76,7 +76,7 @@ let savedIds = new Set(); // この画面で保存した指摘
 let savedMsg = '';         // 保存直後に下に出す文
 let sending = false, failed = false, timer = null, renderLater = false, savedAt = '';
 const openSet = new Set();   // 開いている「直す」欄
-let upq = [], upBusy = false, upFailed = false;   // 写真の送信待ち
+let upq = [], upBusy = false, upFailed = false, removedPhotos = [];   // 写真の送信待ち
 let pend = {};            // 直したが未保存のもの { 指摘ID: {kind,item,places,fix,cancel} }
 let adds = [];            // 追記したが未保存のもの
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -271,7 +271,11 @@ async function flush() {
 const saveAll = flush;
 // 文字を入力している最中は画面を書き換えない（入力が終わってから反映）
 function typing() { const a = document.activeElement; return a && app.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
-function applyData(d) { if (typing()) { last = d; renderLater = true; return; } const y = window.scrollY; render(d); window.scrollTo(0, y); }
+function applyData(d) {
+  // 送ったばかりの写真が返事に入っていなくても消さない
+  const ids = new Set((d.photos || []).map(x => x.id)), gone = new Set(removedPhotos);
+  d.photos = (d.photos || []).filter(x => !gone.has(x.id)).concat(((last && last.photos) || []).filter(x => !ids.has(x.id) && !gone.has(x.id)));
+  if (typing()) { last = d; renderLater = true; return; } const y = window.scrollY; render(d); window.scrollTo(0, y); }
 document.addEventListener('focusout', () => { if (renderLater) setTimeout(() => { if (!typing() && renderLater) { renderLater = false; rerender(); } }, 0); });
 // 閉じる・アプリを切り替えるときに、送りきれていない分を送る
 function flushOnClose() {
@@ -336,6 +340,7 @@ async function delPhoto(pid) {
   try {
     const d = await postData({ a: 'photoDel', pid: pid });
     if (!d.ok) throw new Error(d.error || '');
+    removedPhotos.push(pid);
     last.photos = (last.photos || []).filter(x => x.id !== pid);
     refreshSoon();
   } catch (e) { alert('外せませんでした。もう一度お試しください。'); }
