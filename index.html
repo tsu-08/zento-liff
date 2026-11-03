@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v14 2026-11-03（v13 から：物件の確認・変更（ANDPAD案件名で検索）、同じ物件・同じ工程の記録書の扱い（上書き／複数登録／やめる）、トークで送った行き先待ちの取り込み、写真を別の検査へ移す、音声・文字起こしの一覧、AI案の「このままでよい」、操作していた時間の計測、古い版なら自動で読み直す）
+<!-- 全棟品質評価 確認画面（LIFF）v15 2026-11-03（v14 から：一番下に「確定する」。押すと先に点検し、止める理由（物件・同じ記録書・検査員の質問）と注意（AI案・要確認・未割当・行き先待ち）を出す。確定したら「09_試行」に書き出し、確定済みの表示にする）
+     v14 2026-11-03（v13 から：物件の確認・変更（ANDPAD案件名で検索）、同じ物件・同じ工程の記録書の扱い（上書き／複数登録／やめる）、トークで送った行き先待ちの取り込み、写真を別の検査へ移す、音声・文字起こしの一覧、AI案の「このままでよい」、操作していた時間の計測、古い版なら自動で読み直す）
      v13（v12 から：たたんだ表示でも指摘に置いた写真を小さく出し、そこから押さえて別の指摘・未割当・好例へ動かせるようにする）
      v12（v11 から：写真を指で押さえて動かす（ドラッグ＆ドロップ）。写真を選ぶ・動かす間は指摘を表題だけにたたむ。未割当の選択は1枚ずつ）
      v11（v10 から：LINEのトークで送った写真が未割当にあれば、開いたときにAIの振り分けを自動で始める）
@@ -93,7 +94,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 14;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 15;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -159,7 +160,8 @@ function render(d) {
   }
   h += goodHtml();
   h += filesHtml();
-  h += '<p class="muted" style="margin-top:12px">直したところは数秒後に自動で保存します（送っている間も作業を続けられます）。閉じたときに送りきれていない分も送ります。写真・音声・文字起こしはLINEのトークに送っても入ります。写真は「まとめて追加」でもAIが指摘に振り分けます（違うものは写真を押して付け替え）。承認依頼は次の版で付けます。</p>';
+  if (d.editable && !d.stopped) h += '<div class="topbox" style="margin-top:16px"><button id="cfbtn" onclick="confirmFlow()">確定する</button><div class="muted">全部見終わったら押してください。押すと先に足りないところを点検します。確定すると直せなくなります。</div></div>';
+  h += '<p class="muted" style="margin-top:12px">直したところは数秒後に自動で保存します（送っている間も作業を続けられます）。閉じたときに送りきれていない分も送ります。写真・音声・文字起こしはLINEのトークに送っても入ります。写真は「まとめて追加」でもAIが指摘に振り分けます（違うものは写真を押して付け替え）。</p>';
   app.innerHTML = h;
   openSet.forEach(id => { const e = document.getElementById('ed-' + id); if (e) e.classList.add('open'); });
   document.body.classList.toggle('picking', selPh.size > 0);
@@ -499,6 +501,9 @@ function retryAll() { if (upq.length) pumpUploads(); else if (newUnassigned) run
 // ===== 物件・同じ記録書・行き先待ち・音声/文字起こし（11/3 鶴岡）=====
 function topHtml(d) {
   let h = '';
+  if (d.done) h += '<div class="topbox"><b>' + (d.done.state === '確定' ? '確定しました' : '登録完了（承認待ち）') + '</b>　' + esc(d.done.at)
+    + (d.done.approver ? '<div class="muted">承認：' + esc(d.done.approver) + '（試行：鶴岡さんの承認とみなす）</div>' : '<div class="muted">承認の仕組みができるまで、報告書は出しません。</div>')
+    + (d.done.url ? '<div><a href="' + esc(d.done.url) + '" target="_blank">書き出したデータ（09_試行）</a></div>' : '<div class="muted">書き出しは数分以内に自動で行います。</div>') + '</div>';
   if (d.stopped) h += '<div class="topbox warnbox">この記録書は登録をやめました（消してはいません）。</div>';
   const how = (d.prop && d.prop.how) || '';
   const sure = how === '確認済';
@@ -547,6 +552,31 @@ async function claimWaiting() { await act({ a: 'claimWaiting' }); autoAssign(); 
 function fileDel(aid) { if (confirm('外しますか？（消さずに別のフォルダへ移します）')) act({ a: 'fileDel', aid: aid }); }
 function fixOk(sid) { const s = (last.shiteki || []).find(x => x.id === sid); if (s) s.fixFrom = 'AI案（確認済）'; refreshSoon(); act({ a: 'fixOk', sid: sid }); }
 function toOther(kid) { if (!kid) return; const pids = [...selPh]; selPh.clear(); pids.forEach(id => removedPhotos.push(id)); last.photos = (last.photos || []).filter(x => !pids.includes(x.id)); refreshSoon(); act({ a: 'photoToKs', pids: pids, to: kid }); }
+// 確定（v15）：送りきれていない直しを先に送る → 点検 → 注意があれば確かめてから確定
+async function confirmFlow() {
+  const b = document.getElementById('cfbtn'); if (b) b.disabled = true;
+  try {
+    updateBar('点検しています…');
+    for (let i = 0; i < 40 && (sending || Object.keys(pend).length + adds.length || upq.length); i++) { if (!sending) flush(); await new Promise(r => setTimeout(r, 500)); }
+    if (Object.keys(pend).length + adds.length || upq.length) { flashPhoto('まだ送りきれていない直し・写真があります。電波のよい所でもう一度押してください'); return; }
+    const c = await postData({ a: 'confirmCheck' });
+    if (!c.ok) throw new Error(c.error || '');
+    if (c.pre.block.length) { updateBar(); alertBox('確定の前に、次を済ませてください。', c.pre.block); return; }
+    const msg = c.pre.warn.length ? '次の点を確認しました。このまま確定しますか？\n\n・' + c.pre.warn.join('\n・') : '確定しますか？（確定すると直せなくなります）';
+    if (!confirm(msg)) { updateBar(); return; }
+    updateBar('確定して書き出しています…（30秒ほどかかることがあります）');
+    const d = await postData({ a: 'confirm' });
+    if (!d.ok) throw new Error(d.error || '');
+    applyData(d); window.scrollTo(0, 0); updateBar();
+  } catch (e) { flashPhoto((e && e.message) || '確定できませんでした。もう一度お試しください'); }
+  finally { const b2 = document.getElementById('cfbtn'); if (b2) b2.disabled = false; }
+}
+function alertBox(title, list) {
+  const old = document.getElementById('cfmsg'); if (old) old.remove();
+  const box = document.createElement('div'); box.id = 'cfmsg'; box.className = 'topbox warnbox';
+  box.innerHTML = '<b>' + esc(title) + '</b><ul>' + list.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
+  const b = document.getElementById('cfbtn'); (b ? b.parentNode : app).appendChild(box); box.scrollIntoView({ block: 'center' });
+}
 // 古い版で開いていたら、新しい版で開き直す（ログイン不要。11/3 鶴岡 Q10）
 function needReload(d) {
   if (!d || !d.appVersion || d.appVersion <= APP_VER) return false;
