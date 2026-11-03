@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v10 2026-11-02（v9 から：写真をまとめて追加→AIが指摘に仮振り分け、決められないものは未割当。写真を押して選び、指摘・未割当・好例へ移せる。好例は好例欄に直接貼るか未割当から移す。見出し・項目は任意）
+<!-- 全棟品質評価 確認画面（LIFF）v11 2026-11-03（v10 から：LINEのトークで送った写真が未割当にあれば、開いたときにAIの振り分けを自動で始める）
+     v10（v9 から：写真をまとめて追加→AIが指摘に仮振り分け、決められないものは未割当。写真を押して選び、指摘・未割当・好例へ移せる。好例は好例欄に直接貼るか未割当から移す。見出し・項目は任意）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
 <style>
@@ -417,9 +418,11 @@ async function delPhoto(pid) {
     refreshSoon();
   } catch (e) { alert('外せませんでした。もう一度お試しください。'); }
 }
+// LINEのトークで送った写真（まだAIが見ていない未割当）があれば、開いたときに振り分ける
+function autoAssign() { if (last && last.editable && photosWhere(x => !x.good && !x.sid && !x.judged).length) { newUnassigned = 1; runAssign(); } }
 function retryAll() { if (upq.length) pumpUploads(); else if (newUnassigned) runAssign(); if (failed) flush(); }
 
-async function load() { app.textContent = '読み込み中…'; try { render(await getData()); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
+async function load() { app.textContent = '読み込み中…'; try { render(await getData()); autoAssign(); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
 async function answer(ok) { app.textContent = '送信中…'; try { render(await getData({ a: 'inspector', ok: ok })); } catch (e) { load(); } }
 async function answerName() {
   const v = (document.getElementById('fullname') || {}).value || '';
