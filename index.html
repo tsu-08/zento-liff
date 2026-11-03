@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v11 2026-11-03（v10 から：LINEのトークで送った写真が未割当にあれば、開いたときにAIの振り分けを自動で始める）
+<!-- 全棟品質評価 確認画面（LIFF）v12 2026-11-03（v11 から：写真を指で押さえて動かす（ドラッグ＆ドロップ）。写真を選ぶ・動かす間は指摘を表題だけにたたむ。未割当の選択は1枚ずつ）
+     v11（v10 から：LINEのトークで送った写真が未割当にあれば、開いたときにAIの振り分けを自動で始める）
      v10（v9 から：写真をまとめて追加→AIが指摘に仮振り分け、決められないものは未割当。写真を押して選び、指摘・未割当・好例へ移せる。好例は好例欄に直接貼るか未割当から移す。見出し・項目は任意）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
      画面に施主名・工務店名・個人名は出さない（必須） -->
@@ -58,6 +59,15 @@
 .goodrow{display:flex;gap:6px;align-items:center;margin-top:6px}
 .goodrow img{width:40px;height:40px;object-fit:cover;border-radius:4px;flex:none}
 .goodrow input,.goodrow select{flex:1;min-width:0;font:inherit;font-size:13px;padding:4px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+.ph{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.ghost{position:fixed;z-index:50;pointer-events:none;opacity:.85;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.drophover{outline:3px dashed var(--acc);outline-offset:2px;border-radius:8px}
+.phcount{display:none;font-size:12px;color:var(--sub)}
+body.picking .issue .muted, body.picking .issue .edit, body.picking .issue > button, body.picking .issue .tag, body.picking .issue .photos .ph, body.picking .issue .photos .phadd { display:none !important; }
+body.picking .issue .phcount{display:inline}
+body.picking .issue{padding:8px 0}
+body.picking .issue .photos{margin-top:2px}
+.pickbar{display:flex;gap:6px;align-items:center;margin-top:6px}
 </style>
 </head>
 <body>
@@ -141,6 +151,7 @@ function render(d) {
   h += '<p class="muted" style="margin-top:12px">直したところは数秒後に自動で保存します（送っている間も作業を続けられます）。閉じたときに送りきれていない分も送ります。写真は「まとめて追加」でAIが指摘に振り分けます（違うものは写真を押して付け替え）。指摘ごとの「写真を貼る」でも貼れます。承認依頼は次の版で付けます。</p>';
   app.innerHTML = h;
   openSet.forEach(id => { const e = document.getElementById('ed-' + id); if (e) e.classList.add('open'); });
+  document.body.classList.toggle('picking', selPh.size > 0);
   updateBar();
 }
 
@@ -159,7 +170,7 @@ function issueHtml(s) {
     + (changed ? '<span class="tag acc">保存待ち</span>' : (savedIds.has(s.id) ? '<span class="tag ok">保存済</span>' : ''));
   const text = v.cancel ? '<s>' + esc(s.text) + '</s>' : esc(s.text);
   const k = esc(s.id);
-  let h = '<div class="issue' + (changed ? ' changed' : '') + '"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
+  let h = '<div class="issue' + (changed ? ' changed' : '') + '" data-drop="' + k + '"><div>' + (s.no ? 'No.' + esc(s.no) + '　' : '') + tags + '</div>'
     + '<div class="t">' + text + '</div>'
     + '<div class="muted">項目：' + (esc(itemName(v.item)) || '（なし）') + ' ' + how + '</div>'
     + '<div class="muted">是正：' + (esc(v.fix) || '（なし）') + (changed ? '' : (FROM[s.fixFrom] ? ' <span class="tag">' + FROM[s.fixFrom] + '</span>' : '')) + '</div>'
@@ -307,9 +318,10 @@ window.addEventListener('pagehide', flushOnClose);
 let selPh = new Set(), assigning = false, photoMsg = '', newUnassigned = 0;
 function img64(b) { return b ? '<img alt="" src="data:image/jpeg;base64,' + b + '">' : ''; }
 function tile(x) {
-  return '<span class="ph' + (selPh.has(x.id) ? ' sel' : '') + '" onclick="pickPh(\'' + esc(x.id) + '\')">' + img64(x.thumb)
+  const i = esc(x.id);
+  return '<span class="ph' + (selPh.has(x.id) ? ' sel' : '') + '" onpointerdown="phDown(event,\'' + i + '\')" onpointermove="phMove(event)" onpointerup="phUp(event)" onpointercancel="phCancel()" oncontextmenu="return false">' + img64(x.thumb)
     + (x.how === 'AI仮振り分け' ? '<span class="phai">AI</span>' : '')
-    + (last.editable ? '<button class="phx" onclick="event.stopPropagation();delPhoto(\'' + esc(x.id) + '\')">×</button>' : '') + '</span>';
+    + (last.editable ? '<button class="phx" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();delPhoto(\'' + esc(x.id) + '\')">×</button>' : '') + '</span>';
 }
 function upTile(x) { return '<span class="ph up">' + img64(x.thumb) + '<span class="phs">送信待ち</span></span>'; }
 function addBtn(to, label) { return last.editable ? '<label class="phadd">' + label + '<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotos(\'' + to + '\', this)"></label>' : ''; }
@@ -318,26 +330,27 @@ function photosWhere(f) { return (last.photos || []).filter(f); }
 function photoHtml(sid) {   // 指摘の下
   const list = photosWhere(x => !x.good && x.sid === sid), up = upq.filter(x => x.sid === sid);
   if (!list.length && !up.length && !last.editable) return '';
-  return '<div class="photos">' + list.map(tile).join('') + up.map(upTile).join('') + addBtn(esc(sid), '📷 写真を貼る') + moveBtn(esc(sid), '選んだ写真をここへ') + '</div>';
+  return '<div class="photos">' + '<span class="phcount">写真 ' + (list.length + up.length) + '枚</span>' + list.map(tile).join('') + up.map(upTile).join('') + addBtn(esc(sid), '📷 写真を貼る') + moveBtn(esc(sid), '選んだ写真をここへ') + '</div>';
 }
 function trayHtml() {       // まとめて追加・未割当
   const list = photosWhere(x => !x.good && !x.sid), up = upq.filter(x => x.sid === '');
   if (!list.length && !up.length && !last.editable) return '';
-  return '<div class="tray"><div class="muted">写真をまとめて追加すると、AIが指摘に振り分けます（「AI」の印）。決められなかった写真はここ（未割当）に残ります。'
-    + '写真を押して選び、指摘の「選んだ写真をここへ」で移せます。</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
-    + addBtn('', '📷 写真をまとめて追加') + moveBtn('', '未割当に戻す') + '</div></div>';
+  return '<div class="tray" data-drop=""><div class="muted">写真をまとめて追加すると、AIが指摘に振り分けます（「AI」の印）。決められなかった写真はここ（未割当）に残ります。'
+    + '写真を指で押さえたまま指摘まで動かすと移せます（押して選び「選んだ写真をここへ」でも移せます）。</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
+    + addBtn('', '📷 写真をまとめて追加') + moveBtn('', '未割当に戻す') + '</div>'
+    + (selPh.size ? '<div class="pickbar"><span class="muted">' + selPh.size + '枚を選択中</span><button class="sec small" onclick="clearPick()">選択をやめる</button></div>' : '') + '</div>';
 }
 function goodHtml() {       // 好例（任意。報告書には載せない）
   const list = photosWhere(x => x.good), up = upq.filter(x => x.sid === '__good');
   if (!list.length && !up.length && !last.editable) return '';
-  let h = '<h2>好例写真（任意・報告書には載せません）</h2><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
+  let h = '<div data-drop="__good"><h2>好例写真（任意・報告書には載せません）</h2><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
     + addBtn('__good', '📷 好例を貼る') + moveBtn('__good', '選んだ写真を好例へ') + '</div>';
   list.forEach(x => {
     const dis = last.editable ? '' : ' disabled';
     h += '<div class="goodrow">' + img64(x.thumb) + '<input type="text" placeholder="見出し（任意）" value="' + esc(x.title) + '" onchange="setGood(\'' + esc(x.id) + '\',this.value,null)"' + dis + '>'
       + '<select onchange="setGood(\'' + esc(x.id) + '\',null,this.value)"' + dis + '>' + itemOpts(x.item) + '</select></div>';
   });
-  return h;
+  return h + '</div>';
 }
 // 長辺 max px の JPEG にして base64 で返す（保存容量と通信を抑える）
 async function shrink(file, max, q) {
@@ -407,7 +420,55 @@ async function setGood(pid, title, item) {
   try { const d = await postData({ a: 'photoGood', pid: pid, title: x.title, item: x.item }); if (!d.ok) throw new Error(d.error || ''); }
   catch (e) { flashPhoto('好例の見出しを保存できませんでした。もう一度お試しください'); }
 }
-function refreshSoon() { if (typing()) { renderLater = true; return; } rerender(); }
+function refreshSoon() { if (typing() || drag) { renderLater = true; return; } rerender(); }
+function clearPick() { selPh.clear(); refreshSoon(); }
+// ===== 指で押さえて動かす（ドラッグ＆ドロップ）。動かさずに離したら選ぶ／選ばないの切り替え =====
+let drag = null, scrollTimer = null;
+function phDown(e, id) {
+  if (!last.editable || e.button > 0) return;
+  drag = { id: id, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, moved: false, ghost: null, src: e.currentTarget };
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch (er) { }
+}
+function phMove(e) {
+  if (!drag) return;
+  drag.cx = e.clientX; drag.cy = e.clientY;
+  if (!drag.moved) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
+    drag.moved = true;
+    if (!selPh.has(drag.id)) selPh.add(drag.id);
+    document.body.classList.add('picking');
+    const g = drag.src.cloneNode(true); g.classList.add('ghost'); g.style.width = '64px'; g.style.height = '64px';
+    document.body.appendChild(g); drag.ghost = g;
+    scrollTimer = setInterval(autoScroll, 30);
+  }
+  e.preventDefault();
+  drag.ghost.style.left = (e.clientX - 32) + 'px'; drag.ghost.style.top = (e.clientY - 32) + 'px';
+  markHover();
+}
+function autoScroll() {
+  if (!drag) return;
+  if (drag.cy < 70) window.scrollBy(0, -14); else if (drag.cy > window.innerHeight - 70) window.scrollBy(0, 14); else return;
+  markHover();
+}
+function dropAt(x, y) { const el = document.elementFromPoint(x, y); return el ? el.closest('[data-drop]') : null; }
+function markHover() {
+  document.querySelectorAll('.drophover').forEach(el => el.classList.remove('drophover'));
+  const z = drag && dropAt(drag.cx, drag.cy); if (z) z.classList.add('drophover');
+}
+function endDrag() {
+  clearInterval(scrollTimer); scrollTimer = null;
+  document.querySelectorAll('.drophover').forEach(el => el.classList.remove('drophover'));
+  if (drag && drag.ghost) drag.ghost.remove();
+}
+function phUp(e) {
+  if (!drag) return;
+  const d = drag;
+  if (!d.moved) { drag = null; pickPh(d.id); return; }
+  const z = dropAt(e.clientX, e.clientY);
+  endDrag(); drag = null; renderLater = false;
+  if (z) movePhotos(z.dataset.drop); else rerender();
+}
+function phCancel() { if (!drag) return; endDrag(); drag = null; rerender(); }
 async function delPhoto(pid) {
   if (!confirm('この写真を外しますか？（消さずに別のフォルダへ移します）')) return;
   try {
