@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v12 2026-11-03（v11 から：写真を指で押さえて動かす（ドラッグ＆ドロップ）。写真を選ぶ・動かす間は指摘を表題だけにたたむ。未割当の選択は1枚ずつ）
+<!-- 全棟品質評価 確認画面（LIFF）v13 2026-11-03（v12 から：たたんだ表示でも指摘に置いた写真を小さく出し、そこから押さえて別の指摘・未割当・好例へ動かせるようにする）
+     v12（v11 から：写真を指で押さえて動かす（ドラッグ＆ドロップ）。写真を選ぶ・動かす間は指摘を表題だけにたたむ。未割当の選択は1枚ずつ）
      v11（v10 から：LINEのトークで送った写真が未割当にあれば、開いたときにAIの振り分けを自動で始める）
      v10（v9 から：写真をまとめて追加→AIが指摘に仮振り分け、決められないものは未割当。写真を押して選び、指摘・未割当・好例へ移せる。好例は好例欄に直接貼るか未割当から移す。見出し・項目は任意）
      ここには鍵もデータも置かない。データはGASがLINEのIDトークンを確かめてから返す（61 0.1の5）
@@ -63,8 +64,8 @@
 .ghost{position:fixed;z-index:50;pointer-events:none;opacity:.85;box-shadow:0 4px 14px rgba(0,0,0,.35)}
 .drophover{outline:3px dashed var(--acc);outline-offset:2px;border-radius:8px}
 .phcount{display:none;font-size:12px;color:var(--sub)}
-body.picking .issue .muted, body.picking .issue .edit, body.picking .issue > button, body.picking .issue .tag, body.picking .issue .photos .ph, body.picking .issue .photos .phadd { display:none !important; }
-body.picking .issue .phcount{display:inline}
+body.picking .issue .muted, body.picking .issue .edit, body.picking .issue > button, body.picking .issue .tag, body.picking .issue .photos .phadd { display:none !important; }
+body.picking .issue .ph{width:48px;height:48px}
 body.picking .issue{padding:8px 0}
 body.picking .issue .photos{margin-top:2px}
 .pickbar{display:flex;gap:6px;align-items:center;margin-top:6px}
