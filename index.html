@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v21 2026-11-07（v20 から：新しい版へ読み直すときに毎回違うURLにして、スマホに残った古い画面を使わないようにする）
+<!-- 全棟品質評価 確認画面（LIFF）v22 2026-11-07（v21 から：申し送りは指摘と分けて「申し送り（○件）」に内容だけを並べる。項目・是正・写真・直すは出さない（11/7 鶴岡））
+     v21 2026-11-07（v20 から：新しい版へ読み直すときに毎回違うURLにして、スマホに残った古い画面を使わないようにする）
      v20 2026-11-07（v19 から：指摘に置いた写真をつかんだとき、写真が小さくならず、たたんだあとも指の下に来るようにする。下は「＋ 指摘を追加」「＋ 好例（その他）を追加」「文字起こしデータあり（なければ＋ 文字起こしを追加）」の3行だけ（11/7 鶴岡）
      v19 2026-11-07（v18 から：写真の右上の×をなくし、写真をつかんだら画面の下にゴミ箱が出て、そこへ落とすと外す（消さずに退避）。つかみやすくする（押さえる時間を0.25秒に、つかんでいる間は画面がスクロールしないように）。選んだ写真は「外す」でも外せる（11/7 鶴岡）
      v18 2026-11-07（v17 から：下の「この画面は開いた本人だけが見られます」を外す（11/7 鶴岡）、確定済みの検査では未割当の欄に「確定済みのため動かせません」と出す）
@@ -106,6 +107,7 @@ body.picking .issue .photos{margin-top:2px}
 .issue .l2{color:var(--sub);font-size:13px}
 .more>div{margin-top:8px}.more button{margin-top:0}
 .files{margin:4px 0 0;padding-left:18px}
+.memo{margin:0 0 14px;padding-left:20px}.memo li{margin:4px 0}
 .txtin{width:100%;min-height:90px;font:inherit;font-size:14px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
 .addph{display:inline-flex;width:40px;height:40px;align-items:center;justify-content:center;border:1px dashed var(--acc);border-radius:6px;color:var(--acc);font-size:18px;cursor:pointer}
 </style>
@@ -126,7 +128,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 21;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 22;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -178,10 +180,13 @@ function render(d) {
   }
   let h = d.answer ? '<p class="ok">' + esc(d.answer) + '</p>' : '';
   h += headHtml(d) + topHtml(d);
-  h += '<div class="sec2"><h2>指摘（' + d.shiteki.length + '件）</h2>' + qBtn('iss') + '</div>'
+  const isMemo = s => ((pend[s.id] || {}).kind ?? s.kind) === '申し送り';
+  const main = d.shiteki.filter(s => !isMemo(s)), memo = d.shiteki.filter(isMemo);
+  h += '<div class="sec2"><h2>指摘（' + main.length + '件）</h2>' + qBtn('iss') + '</div>'
     + helpBox('iss', '直すところは「直す」を押して変えます（数秒後に自動で保存。閉じたときも送ります）。写真は押さえたまま指摘まで動かすか、押して選んでから「ここへ」で移せます。写真はLINEのトークに送っても入ります。')
     + trayHtml();
-  d.shiteki.forEach(s => { h += issueHtml(s); });
+  main.forEach(s => { h += issueHtml(s); });
+  if (memo.length) h += '<div class="sec2"><h2>申し送り（' + memo.length + '件）</h2></div><ul class="memo">' + memo.map(s => '<li>' + esc(s.text) + (s.place ? '（' + esc(s.place) + '）' : '') + '</li>').join('') + '</ul>';
   adds.forEach((a, i) => { h += addedHtml(a, i); });
   // 下は3行だけ（11/7 鶴岡）：＋指摘を追加／＋好例（その他）を追加／文字起こし
   h += '<div class="more">';
