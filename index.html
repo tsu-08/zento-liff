@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v17 2026-11-05（v16 から：画面を簡潔に（11/5 鶴岡「簡潔に、分かりやすく手戻りなく、直感的に」）。上に物件・工程・点数を1枚にまとめ、ほかの確定前の検査へ切り替え。済ませることは「やること」1つにまとめ、済んだら消える。指摘は内容・項目・是正の3行、印は要確認・重大・取消・種別だけ。AI案の「このままでよい」は確定時にまとめて。説明は「？」を押したときだけ。行き先待ちは一覧で選んで入れる。同じ記録書の「上書き／やめる」も画面で選べる（パソコンのLINE向け））
+<!-- 全棟品質評価 確認画面（LIFF）v18 2026-11-07（v17 から：下の「この画面は開いた本人だけが見られます」を外す（11/7 鶴岡）、確定済みの検査では未割当の欄に「確定済みのため動かせません」と出す）
+     v17 2026-11-05（v16 から：画面を簡潔に（11/5 鶴岡「簡潔に、分かりやすく手戻りなく、直感的に」）。上に物件・工程・点数を1枚にまとめ、ほかの確定前の検査へ切り替え。済ませることは「やること」1つにまとめ、済んだら消える。指摘は内容・項目・是正の3行、印は要確認・重大・取消・種別だけ。AI案の「このままでよい」は確定時にまとめて。説明は「？」を押したときだけ。行き先待ちは一覧で選んで入れる。同じ記録書の「上書き／やめる」も画面で選べる（パソコンのLINE向け））
      v16 2026-11-05（v15 から：Android（Pixel など）で写真を押さえて動かせなかった不具合の修正（写真そのものを掴む既定の動きを止め、0.35秒押さえると持ち上がる）、是正指示の選択肢に「自分で入力する」を追加し、選んだときだけ入力欄を出す）
      v15 2026-11-03（v14 から：一番下に「確定する」。押すと先に点検し、止める理由（物件・同じ記録書・検査員の質問）と注意（AI案・要確認・未割当・行き先待ち）を出す。確定したら「09_試行」に書き出し、確定済みの表示にする）
      v14 2026-11-03（v13 から：物件の確認・変更（ANDPAD案件名で検索）、同じ物件・同じ工程の記録書の扱い（上書き／複数登録／やめる）、トークで送った行き先待ちの取り込み、写真を別の検査へ移す、音声・文字起こしの一覧、AI案の「このままでよい」、操作していた時間の計測、古い版なら自動で読み直す）
@@ -104,7 +105,6 @@ body.picking .issue .photos{margin-top:2px}
 <body>
 <main>
   <div id="app" class="card">読み込み中…</div>
-  <p class="muted">この画面は開いた本人だけが見られます。</p>
 </main>
 <div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" id="retryBtn" onclick="retryAll()" style="display:none">もう一度送る</button></span></div></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -117,7 +117,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 17;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 18;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -374,7 +374,7 @@ function photoHtml(sid, extra) {   // 指摘の下（extra：右端に置くボ�
 function trayHtml() {       // まとめて追加・未割当
   const list = photosWhere(x => !x.good && !x.sid), up = upq.filter(x => x.sid === '');
   if (!list.length && !up.length && !last.editable) return '';
-  return '<div class="tray" data-drop=""><div class="muted">未割当の写真' + (list.length ? '（' + list.length + '枚）：押さえて指摘へ動かす' : '') + '</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
+  return '<div class="tray" data-drop=""><div class="muted">未割当の写真' + (list.length ? '（' + list.length + '枚）' + (last.editable ? '：押さえて指摘へ動かす' : '：確定済みのため動かせません') : '') + '</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
     + addBtn('', '📷 写真をまとめて追加') + moveBtn('', '未割当に戻す') + '</div>'
     + (selPh.size ? '<div class="pickbar"><span class="muted">' + selPh.size + '枚を選択中</span><button class="sec small" onclick="clearPick()">選択をやめる</button>'
       + ((last.others || []).length ? '<select onchange="toOther(this.value)" style="font:inherit;font-size:13px;max-width:60%"><option value="">別の検査へ移す…</option>' + last.others.map(o => '<option value="' + esc(o.kid) + '">' + esc(o.label) + '</option>').join('') + '</select>' : '')
