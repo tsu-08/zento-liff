@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v18 2026-11-07（v17 から：下の「この画面は開いた本人だけが見られます」を外す（11/7 鶴岡）、確定済みの検査では未割当の欄に「確定済みのため動かせません」と出す）
+<!-- 全棟品質評価 確認画面（LIFF）v19 2026-11-07（v18 から：写真の右上の×をなくし、写真をつかんだら画面の下にゴミ箱が出て、そこへ落とすと外す（消さずに退避）。つかみやすくする（押さえる時間を0.25秒に、つかんでいる間は画面がスクロールしないように）。選んだ写真は「外す」でも外せる（11/7 鶴岡）
+     v18 2026-11-07（v17 から：下の「この画面は開いた本人だけが見られます」を外す（11/7 鶴岡）、確定済みの検査では未割当の欄に「確定済みのため動かせません」と出す）
      v17 2026-11-05（v16 から：画面を簡潔に（11/5 鶴岡「簡潔に、分かりやすく手戻りなく、直感的に」）。上に物件・工程・点数を1枚にまとめ、ほかの確定前の検査へ切り替え。済ませることは「やること」1つにまとめ、済んだら消える。指摘は内容・項目・是正の3行、印は要確認・重大・取消・種別だけ。AI案の「このままでよい」は確定時にまとめて。説明は「？」を押したときだけ。行き先待ちは一覧で選んで入れる。同じ記録書の「上書き／やめる」も画面で選べる（パソコンのLINE向け））
      v16 2026-11-05（v15 から：Android（Pixel など）で写真を押さえて動かせなかった不具合の修正（写真そのものを掴む既定の動きを止め、0.35秒押さえると持ち上がる）、是正指示の選択肢に「自分で入力する」を追加し、選んだときだけ入力欄を出す）
      v15 2026-11-03（v14 から：一番下に「確定する」。押すと先に点検し、止める理由（物件・同じ記録書・検査員の質問）と注意（AI案・要確認・未割当・行き先待ち）を出す。確定したら「09_試行」に書き出し、確定済みの表示にする）
@@ -55,6 +56,9 @@
 .ph{position:relative;width:64px;height:64px;border-radius:6px;overflow:hidden;background:var(--line)}
 .ph img{width:100%;height:100%;object-fit:cover;display:block}
 .ph.up{opacity:.55}
+.trash{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;align-items:center;justify-content:center;height:84px;background:#7a2a1a;color:#fff;font-size:15px;opacity:.92}
+body.lifting .trash{display:flex}
+.trash.drophover{outline:none;background:#c0391b;opacity:1}
 .phx{position:absolute;top:0;right:0;margin:0;padding:0 7px;font-size:14px;line-height:22px;border-radius:0 0 0 6px;background:rgba(0,0,0,.55);border:none;color:#fff}
 .phs{position:absolute;bottom:0;left:0;right:0;font-size:11px;text-align:center;background:rgba(255,255,255,.85);color:#333}
 .phadd{display:inline-block;font-size:13px;color:var(--acc);border:1px dashed var(--acc);border-radius:8px;padding:6px 10px;cursor:pointer}
@@ -106,6 +110,7 @@ body.picking .issue .photos{margin-top:2px}
 <main>
   <div id="app" class="card">読み込み中…</div>
 </main>
+<div class="trash" id="trash" data-drop="__trash">🗑 ここに落とすと外す（消さずに別のフォルダへ）</div>
 <div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" id="retryBtn" onclick="retryAll()" style="display:none">もう一度送る</button></span></div></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
@@ -117,7 +122,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 18;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 19;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -359,7 +364,7 @@ function tile(x) {
   const i = esc(x.id);
   return '<span class="ph' + (selPh.has(x.id) ? ' sel' : '') + '" onpointerdown="phDown(event,\'' + i + '\')" onpointermove="phMove(event)" onpointerup="phUp(event)" onpointercancel="phCancel()" ondragstart="return false" oncontextmenu="return false">' + img64(x.thumb)
     + (x.how === 'AI仮振り分け' ? '<span class="phai">AI</span>' : '')
-    + (last.editable ? '<button class="phx" onpointerdown="event.stopPropagation()" onclick="event.stopPropagation();delPhoto(\'' + esc(x.id) + '\')">×</button>' : '') + '</span>';
+    + '</span>';
 }
 function upTile(x) { return '<span class="ph up">' + img64(x.thumb) + '<span class="phs">送信待ち</span></span>'; }
 function addTile(to) { return last.editable ? '<label class="addph" title="写真を貼る">＋<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotos(\'' + to + '\', this)"></label>' : ''; }
@@ -376,7 +381,7 @@ function trayHtml() {       // まとめて追加・未割当
   if (!list.length && !up.length && !last.editable) return '';
   return '<div class="tray" data-drop=""><div class="muted">未割当の写真' + (list.length ? '（' + list.length + '枚）' + (last.editable ? '：押さえて指摘へ動かす' : '：確定済みのため動かせません') : '') + '</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
     + addBtn('', '📷 写真をまとめて追加') + moveBtn('', '未割当に戻す') + '</div>'
-    + (selPh.size ? '<div class="pickbar"><span class="muted">' + selPh.size + '枚を選択中</span><button class="sec small" onclick="clearPick()">選択をやめる</button>'
+    + (selPh.size ? '<div class="pickbar"><span class="muted">' + selPh.size + '枚を選択中</span><button class="sec small" onclick="clearPick()">選択をやめる</button><button class="sec small" onclick="delSelected()">🗑 外す</button>'
       + ((last.others || []).length ? '<select onchange="toOther(this.value)" style="font:inherit;font-size:13px;max-width:60%"><option value="">別の検査へ移す…</option>' + last.others.map(o => '<option value="' + esc(o.kid) + '">' + esc(o.label) + '</option>').join('') + '</select>' : '')
       + '</div>' : '') + '</div>';
 }
@@ -471,12 +476,12 @@ function phDown(e, id) {
   if (e.pointerType !== 'mouse') e.preventDefault();
   drag = { id: id, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, moved: false, lifted: false, ghost: null, src: e.currentTarget };
   try { e.currentTarget.setPointerCapture(e.pointerId); } catch (er) { }
-  drag.timer = setTimeout(function () { if (drag && !drag.lifted) liftPh(); }, 350);
+  drag.timer = setTimeout(function () { if (drag && !drag.lifted) liftPh(); }, 250);
 }
 function liftPh() {
   drag.lifted = true;
   if (!selPh.has(drag.id)) selPh.add(drag.id);
-  document.body.classList.add('picking');
+  document.body.classList.add('picking', 'lifting');
   drag.src.classList.add('lift');
   const g = drag.src.cloneNode(true); g.classList.add('ghost'); g.classList.remove('lift'); g.style.width = '64px'; g.style.height = '64px';
   g.style.left = (drag.cx - 32) + 'px'; g.style.top = (drag.cy - 32) + 'px';
@@ -495,7 +500,8 @@ function phMove(e) {
 }
 function autoScroll() {
   if (!drag) return;
-  if (drag.cy < 70) window.scrollBy(0, -14); else if (drag.cy > window.innerHeight - 70) window.scrollBy(0, 14); else return;
+  const tb = window.innerHeight - 84;   // 下のゴミ箱の上60pxで下へスクロール（ゴミ箱の上ではスクロールしない）
+  if (drag.cy < 70) window.scrollBy(0, -14); else if (drag.cy > tb - 60 && drag.cy < tb) window.scrollBy(0, 14); else return;
   markHover();
 }
 function dropAt(x, y) { const el = document.elementFromPoint(x, y); return el ? el.closest('[data-drop]') : null; }
@@ -505,6 +511,7 @@ function markHover() {
 }
 function endDrag() {
   clearInterval(scrollTimer); scrollTimer = null;
+  document.body.classList.remove('lifting');
   if (drag) { clearTimeout(drag.timer); if (drag.src) drag.src.classList.remove('lift'); }
   document.querySelectorAll('.drophover').forEach(el => el.classList.remove('drophover'));
   if (drag && drag.ghost) drag.ghost.remove();
@@ -516,9 +523,23 @@ function phUp(e) {
   if (!d.moved) { endDrag(); drag = null; refreshSoon(); return; }   // 持ち上げただけで離した → 選んだままにする
   const z = dropAt(e.clientX, e.clientY);
   endDrag(); drag = null; renderLater = false;
-  if (z) movePhotos(z.dataset.drop); else rerender();
+  if (z && z.dataset.drop === '__trash') delPhotos([...selPh]);
+  else if (z) movePhotos(z.dataset.drop); else rerender();
 }
 function phCancel() { if (!drag) return; endDrag(); drag = null; rerender(); }
+// ゴミ箱へ落とした・「外す」を押した写真を外す（消さずに「05_外した写真」へ移す）
+async function delPhotos(pids) {
+  if (!pids.length) return;
+  pids.forEach(id => { removedPhotos.push(id); selPh.delete(id); });
+  last.photos = (last.photos || []).filter(x => !pids.includes(x.id));
+  refreshSoon();
+  let ng = 0;
+  for (const pid of pids) { try { const d = await postData({ a: 'photoDel', pid: pid }); if (!d.ok) throw new Error(''); } catch (e) { ng++; } }
+  flashPhoto(ng ? '外せなかった写真があります（' + ng + '枚）。開き直してください' : pids.length + '枚を外しました（消さずに別のフォルダへ移しました）');
+}
+function delSelected() { if (confirm(selPh.size + '枚を外しますか？（消さずに別のフォルダへ移します）')) delPhotos([...selPh]); }
+// つかんでいる間は画面をスクロールさせない（Android でつかみ損ねるのを防ぐ）
+document.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
 async function delPhoto(pid) {
   if (!confirm('この写真を外しますか？（消さずに別のフォルダへ移します）')) return;
   try {
