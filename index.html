@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v19 2026-11-07（v18 から：写真の右上の×をなくし、写真をつかんだら画面の下にゴミ箱が出て、そこへ落とすと外す（消さずに退避）。つかみやすくする（押さえる時間を0.25秒に、つかんでいる間は画面がスクロールしないように）。選んだ写真は「外す」でも外せる（11/7 鶴岡）
+<!-- 全棟品質評価 確認画面（LIFF）v20 2026-11-07（v19 から：指摘に置いた写真をつかんだとき、写真が小さくならず、たたんだあとも指の下に来るようにする。下は「＋ 指摘を追加」「＋ 好例（その他）を追加」「文字起こしデータあり（なければ＋ 文字起こしを追加）」の3行だけ（11/7 鶴岡）
+     v19 2026-11-07（v18 から：写真の右上の×をなくし、写真をつかんだら画面の下にゴミ箱が出て、そこへ落とすと外す（消さずに退避）。つかみやすくする（押さえる時間を0.25秒に、つかんでいる間は画面がスクロールしないように）。選んだ写真は「外す」でも外せる（11/7 鶴岡）
      v18 2026-11-07（v17 から：下の「この画面は開いた本人だけが見られます」を外す（11/7 鶴岡）、確定済みの検査では未割当の欄に「確定済みのため動かせません」と出す）
      v17 2026-11-05（v16 から：画面を簡潔に（11/5 鶴岡「簡潔に、分かりやすく手戻りなく、直感的に」）。上に物件・工程・点数を1枚にまとめ、ほかの確定前の検査へ切り替え。済ませることは「やること」1つにまとめ、済んだら消える。指摘は内容・項目・是正の3行、印は要確認・重大・取消・種別だけ。AI案の「このままでよい」は確定時にまとめて。説明は「？」を押したときだけ。行き先待ちは一覧で選んで入れる。同じ記録書の「上書き／やめる」も画面で選べる（パソコンのLINE向け））
      v16 2026-11-05（v15 から：Android（Pixel など）で写真を押さえて動かせなかった不具合の修正（写真そのものを掴む既定の動きを止め、0.35秒押さえると持ち上がる）、是正指示の選択肢に「自分で入力する」を追加し、選んだときだけ入力欄を出す）
@@ -77,7 +78,6 @@ body.lifting .trash{display:flex}
 .drophover{outline:3px dashed var(--acc);outline-offset:2px;border-radius:8px}
 .phcount{display:none;font-size:12px;color:var(--sub)}
 body.picking .issue .muted, body.picking .issue .edit, body.picking .issue > button, body.picking .issue .tag, body.picking .issue .photos .phadd { display:none !important; }
-body.picking .issue .ph{width:48px;height:48px}
 body.picking .issue{padding:8px 0}
 body.picking .issue .photos{margin-top:2px}
 .pickbar{display:flex;gap:6px;align-items:center;margin-top:6px}
@@ -103,6 +103,9 @@ body.picking .issue .photos{margin-top:2px}
 .wl .at{position:absolute;bottom:0;left:0;right:0;font-size:10px;text-align:center;background:rgba(0,0,0,.5);color:#fff}
 .fold{cursor:pointer}
 .issue .l2{color:var(--sub);font-size:13px}
+.more>div{margin-top:8px}.more button{margin-top:0}
+.files{margin:4px 0 0;padding-left:18px}
+.txtin{width:100%;min-height:90px;font:inherit;font-size:14px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
 .addph{display:inline-flex;width:40px;height:40px;align-items:center;justify-content:center;border:1px dashed var(--acc);border-radius:6px;color:var(--acc);font-size:18px;cursor:pointer}
 </style>
 </head>
@@ -122,7 +125,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 19;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 20;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -179,10 +182,13 @@ function render(d) {
     + trayHtml();
   d.shiteki.forEach(s => { h += issueHtml(s); });
   adds.forEach((a, i) => { h += addedHtml(a, i); });
-  if (d.editable) h += '<div style="margin-top:12px"><button class="sec small" onclick="toggle(\'new\')">＋ 指摘を追加</button>' + newForm() + '</div>';
-  h += filesHtml();
+  // 下は3行だけ（11/7 鶴岡）：＋指摘を追加／＋好例（その他）を追加／文字起こし
+  h += '<div class="more">';
+  if (d.editable) h += '<div><button class="sec small" onclick="toggle(\'new\')">＋ 指摘を追加</button>' + newForm() + '</div>';
   h += goodHtml();
-  if (d.editable && !d.stopped) h += '<div style="margin-top:20px"><button id="cfbtn" style="width:100%;padding:12px" onclick="confirmFlow()">確定する</button><div class="muted">見終わったら押す。足りないところがあれば先に知らせます。</div></div>';
+  h += filesHtml();
+  h += '</div>';
+  if (d.editable && !d.stopped) h += '<div style="margin-top:20px"><button id="cfbtn" style="width:100%;padding:12px" onclick="confirmFlow()">確定する</button></div>';
   app.innerHTML = h;
   openSet.forEach(id => { const e = document.getElementById('ed-' + id); if (e) e.classList.add('open'); });
   document.body.classList.toggle('picking', selPh.size > 0);
@@ -388,8 +394,8 @@ function trayHtml() {       // まとめて追加・未割当
 function goodHtml() {       // 好例（任意。報告書には載せない）
   const list = photosWhere(x => x.good), up = upq.filter(x => x.sid === '__good');
   if (!list.length && !up.length && !last.editable) return '';
-  if (!list.length && !up.length && !helpOpen.has('good')) return '<div style="margin-top:12px"><button class="sec small" onclick="helpOpen.add(\'good\');rerender()">＋ 好例写真（任意）</button></div>';
-  let h = '<div data-drop="__good"><h2>好例写真（任意・報告書には載せません）</h2><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
+  if (!list.length && !up.length && !helpOpen.has('good')) return last.editable ? '<div><button class="sec small" onclick="helpOpen.add(\'good\');rerender()">＋ 好例（その他）を追加</button></div>' : '';
+  let h = '<div data-drop="__good"><div class="k">好例（その他）・報告書には載せません</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
     + addBtn('__good', '📷 好例を貼る') + moveBtn('__good', '選んだ写真を好例へ') + '</div>';
   list.forEach(x => {
     const dis = last.editable ? '' : ' disabled';
@@ -481,7 +487,10 @@ function phDown(e, id) {
 function liftPh() {
   drag.lifted = true;
   if (!selPh.has(drag.id)) selPh.add(drag.id);
+  const y0 = drag.src.getBoundingClientRect().top;
   document.body.classList.add('picking', 'lifting');
+  const y1 = drag.src.getBoundingClientRect().top;
+  if (Math.abs(y1 - y0) > 2) window.scrollBy(0, y1 - y0);   // たたんで位置がずれた分を戻し、写真を指の下に置いたままにする
   drag.src.classList.add('lift');
   const g = drag.src.cloneNode(true); g.classList.add('ghost'); g.classList.remove('lift'); g.style.width = '64px'; g.style.height = '64px';
   g.style.left = (drag.cx - 32) + 'px'; g.style.top = (drag.cy - 32) + 'px';
@@ -641,10 +650,17 @@ function topHtmlOld(d) {
 }
 function filesHtml() {
   const f = last.files || [];
-  if (!f.length) return '';
-  return '<h2>音声・文字起こし（' + f.length + '件）</h2><ul class="files">' + f.map(x => '<li>' + (x.kind === '音声' ? '🎙 音声' : '📝 ' + esc(x.text || '文字起こし'))
-    + (last.editable ? ' <button class="sec small" onclick="fileDel(\'' + esc(x.id) + '\')">外す</button>' : '') + '</li>').join('') + '</ul>';
+  if (!f.length) {
+    if (!last.editable) return '';
+    return '<div><button class="sec small" onclick="toggle(\'txt\')">＋ 文字起こしを追加</button><div class="edit" id="ed-txt"><textarea class="txtin" id="txtin" placeholder="文字起こしを貼り付け"></textarea><button class="small" onclick="addText()">追加する</button></div></div>';
+  }
+  const open = helpOpen.has('files');
+  return '<div><span class="ok fold" onclick="toggleFiles()">📝 文字起こしデータあり（' + f.length + '件）' + (open ? ' ▴' : ' ▾') + '</span>'
+    + (open ? '<ul class="files">' + f.map(x => '<li>' + (x.kind === '音声' ? '🎙 音声' : esc(x.text || '文字起こし'))
+      + (last.editable ? ' <button class="sec small" onclick="fileDel(\'' + esc(x.id) + '\')">外す</button>' : '') + '</li>').join('') + '</ul>' : '') + '</div>';
 }
+function toggleFiles() { if (helpOpen.has('files')) helpOpen.delete('files'); else helpOpen.add('files'); rerender(); }
+function addText() { const v = (document.getElementById('txtin') || {}).value || ''; if (!v.trim()) return; openSet.delete('txt'); act({ a: 'addText', text: v }); }
 function propSearch() {
   const q = (document.getElementById('propq').value || '').replace(/\s|　/g, '');
   const box = document.getElementById('propres');
