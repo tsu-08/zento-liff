@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v20 2026-11-07（v19 から：指摘に置いた写真をつかんだとき、写真が小さくならず、たたんだあとも指の下に来るようにする。下は「＋ 指摘を追加」「＋ 好例（その他）を追加」「文字起こしデータあり（なければ＋ 文字起こしを追加）」の3行だけ（11/7 鶴岡）
+<!-- 全棟品質評価 確認画面（LIFF）v21 2026-11-07（v20 から：新しい版へ読み直すときに毎回違うURLにして、スマホに残った古い画面を使わないようにする）
+     v20 2026-11-07（v19 から：指摘に置いた写真をつかんだとき、写真が小さくならず、たたんだあとも指の下に来るようにする。下は「＋ 指摘を追加」「＋ 好例（その他）を追加」「文字起こしデータあり（なければ＋ 文字起こしを追加）」の3行だけ（11/7 鶴岡）
      v19 2026-11-07（v18 から：写真の右上の×をなくし、写真をつかんだら画面の下にゴミ箱が出て、そこへ落とすと外す（消さずに退避）。つかみやすくする（押さえる時間を0.25秒に、つかんでいる間は画面がスクロールしないように）。選んだ写真は「外す」でも外せる（11/7 鶴岡）
      v18 2026-11-07（v17 から：下の「この画面は開いた本人だけが見られます」を外す（11/7 鶴岡）、確定済みの検査では未割当の欄に「確定済みのため動かせません」と出す）
      v17 2026-11-05（v16 から：画面を簡潔に（11/5 鶴岡「簡潔に、分かりやすく手戻りなく、直感的に」）。上に物件・工程・点数を1枚にまとめ、ほかの確定前の検査へ切り替え。済ませることは「やること」1つにまとめ、済んだら消える。指摘は内容・項目・是正の3行、印は要確認・重大・取消・種別だけ。AI案の「このままでよい」は確定時にまとめて。説明は「？」を押したときだけ。行き先待ちは一覧で選んで入れる。同じ記録書の「上書き／やめる」も画面で選べる（パソコンのLINE向け））
@@ -125,7 +126,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 20;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 21;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -710,7 +711,7 @@ function alertBox(title, list) {
 function needReload(d) {
   if (!d || !d.appVersion || d.appVersion <= APP_VER) return false;
   if (Number(qs.get('v') || 0) >= d.appVersion) return false;   // 読み直しても古いまま（配信待ち）なら繰り返さない
-  location.replace(location.pathname + '?v=' + d.appVersion + '&f=' + encodeURIComponent(fileId));
+  location.replace(location.pathname + '?v=' + d.appVersion + '&t=' + Date.now() + '&f=' + encodeURIComponent(fileId));
   return true;
 }
 
