@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v23 2026-11-07（v22 から：申し送りの欄は1件ずつ「内容・写真・直す」にする。項目と是正は出さず、直す欄も種別と取消だけ（11/7 鶴岡））
+<!-- 全棟品質評価 確認画面（LIFF）v24 2026-11-07（v23 から：ゴミ箱の文字を「🗑 別のフォルダへ移動」だけにする（11/7 鶴岡））
+     v23 2026-11-07（v22 から：申し送りの欄は1件ずつ「内容・写真・直す」にする。項目と是正は出さず、直す欄も種別と取消だけ（11/7 鶴岡））
      v22 2026-11-07（v21 から：申し送りは指摘と分けて「申し送り（○件）」に内容だけを並べる。項目・是正・写真・直すは出さない（11/7 鶴岡））
      v21 2026-11-07（v20 から：新しい版へ読み直すときに毎回違うURLにして、スマホに残った古い画面を使わないようにする）
      v20 2026-11-07（v19 から：指摘に置いた写真をつかんだとき、写真が小さくならず、たたんだあとも指の下に来るようにする。下は「＋ 指摘を追加」「＋ 好例（その他）を追加」「文字起こしデータあり（なければ＋ 文字起こしを追加）」の3行だけ（11/7 鶴岡）
@@ -117,7 +118,7 @@ body.picking .issue .photos{margin-top:2px}
 <main>
   <div id="app" class="card">読み込み中…</div>
 </main>
-<div class="trash" id="trash" data-drop="__trash">🗑 ここに落とすと外す（消さずに別のフォルダへ）</div>
+<div class="trash" id="trash" data-drop="__trash">🗑 別のフォルダへ移動</div>
 <div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" id="retryBtn" onclick="retryAll()" style="display:none">もう一度送る</button></span></div></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
@@ -129,7 +130,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 23;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 24;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
