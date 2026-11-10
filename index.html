@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v24 2026-11-07（v23 から：ゴミ箱の文字を「🗑 別のフォルダへ移動」だけにする（11/7 鶴岡））
+<!-- 全棟品質評価 確認画面（LIFF）v28 2026-11-10（v27 から：確定済みで報告書がまだのとき、ANDPAD報告書を待っていれば「ANDPAD報告書が入ったら作ります」と出す（89 v4））
+     v27 2026-11-10（v26 から：89 鶴岡決定。「＋ 好例（その他）」の上に「＋ 全景（表紙）」（1枚。選び直すと前の写真は外す。未割当の写真を押さえて動かしても入る）。同行の検査員がいるときだけ、上に「件数に数える」のチェック（名前は出さない））
+     v26 2026-11-10（v25 から：「直す」に報告書に出す指摘の文の欄（記録書の原文は残す）。確定済みの画面に報告書の状態とリンク、「別の形で作る」（87 ④⑥））
+     v25 2026-11-09（v24 から：確定を押したあと、入力欄が開いていても必ず確定済みの画面に切り替える。押している間のボタンは「登録しています…」、確定後は「登録済み（確定）」と出す。返事が途中で切れても読み直して今の状態を出す（11/9 鶴岡））
+     v24 2026-11-07（v23 から：ゴミ箱の文字を「🗑 別のフォルダへ移動」だけにする（11/7 鶴岡））
      v23 2026-11-07（v22 から：申し送りの欄は1件ずつ「内容・写真・直す」にする。項目と是正は出さず、直す欄も種別と取消だけ（11/7 鶴岡））
      v22 2026-11-07（v21 から：申し送りは指摘と分けて「申し送り（○件）」に内容だけを並べる。項目・是正・写真・直すは出さない（11/7 鶴岡））
      v21 2026-11-07（v20 から：新しい版へ読み直すときに毎回違うURLにして、スマホに残った古い画面を使わないようにする）
@@ -130,7 +134,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 24;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 28;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -193,10 +197,12 @@ function render(d) {
   // 下は3行だけ（11/7 鶴岡）：＋指摘を追加／＋好例（その他）を追加／文字起こし
   h += '<div class="more">';
   if (d.editable) h += '<div><button class="sec small" onclick="toggle(\'new\')">＋ 指摘を追加</button>' + newForm() + '</div>';
+  h += zenHtml();
   h += goodHtml();
   h += filesHtml();
   h += '</div>';
   if (d.editable && !d.stopped) h += '<div style="margin-top:20px"><button id="cfbtn" style="width:100%;padding:12px" onclick="confirmFlow()">確定する</button></div>';
+  else if (d.done) h += '<div style="margin-top:20px"><button style="width:100%;padding:12px" disabled>✓ 登録済み（' + (d.done.state === '確定' ? '確定' : '承認待ち') + '）</button></div>';
   app.innerHTML = h;
   openSet.forEach(id => { const e = document.getElementById('ed-' + id); if (e) e.classList.add('open'); });
   document.body.classList.toggle('picking', selPh.size > 0);
@@ -205,7 +211,7 @@ function render(d) {
 
 function issueHtml(s, isMemo) {   // isMemo：申し送り（内容・写真・直すだけ。項目と是正は出さない）
   const p = pend[s.id] || {};
-  const v = { kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled };
+  const v = { kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled, rtext: p.rtext ?? (s.rtext || '') };
   const changed = !!pend[s.id];
   const plLabel = (PLACES.find(x => x[0] === v.places) || PLACES[0])[1];
   // v17：印は 種別（指摘以外）・か所数（2以上）・要確認・重大・取消 だけ
@@ -214,7 +220,9 @@ function issueHtml(s, isMemo) {   // isMemo：申し送り（内容・写真・�
     + (s.ask ? '<span class="tag warn">要確認</span>' : '')
     + (s.severe ? '<span class="tag warn">重大</span>' : '')
     + (v.cancel ? '<span class="tag">取消</span>' : '');
-  const text = (v.cancel ? '<s>' + esc(s.text) + '</s>' : esc(s.text)) + (s.place ? '<span class="l2">（' + esc(s.place) + '）</span>' : '');
+  const shown = v.rtext && !isMemo ? v.rtext : s.text;   // 報告書に出す文があればそれを見せ、記録書の原文は下に小さく
+  const text = (v.cancel ? '<s>' + esc(shown) + '</s>' : esc(shown)) + (s.place ? '<span class="l2">（' + esc(s.place) + '）</span>' : '')
+    + (v.rtext && !isMemo && v.rtext !== s.text ? '<div class="l2">記録書：' + esc(s.text) + '</div>' : '');
   const k = esc(s.id);
   let h = '<div class="issue' + (changed ? ' changed' : '') + '" data-drop="' + k + '">'
     + '<div class="t">' + (s.no ? esc(s.no) + '. ' : '') + text + ' ' + tags + '</div>'
@@ -224,6 +232,7 @@ function issueHtml(s, isMemo) {   // isMemo：申し送り（内容・写真・�
   if (last.editable) {
     h += ''
       + '<div class="edit" id="ed-' + k + '">'
+      + (isMemo ? '' : '<label>報告書に出す文</label><input type="text" value="' + esc(v.rtext || s.text) + '" onchange="setp(\'' + k + '\',\'rtext\',this.value)" oninput="setq(\'' + k + '\',\'rtext\',this.value)">')
       + '<label>種別</label><select onchange="setp(\'' + k + '\',\'kind\',this.value)">' + opts(KINDS.map(x => [x, x]), v.kind) + '</select>'
       + (isMemo ? '' : '<label>項目</label><select onchange="setp(\'' + k + '\',\'item\',this.value)">' + itemOpts(v.item) + '</select>'
       + '<label>か所数</label><select onchange="setp(\'' + k + '\',\'places\',this.value)">' + opts(PLACES, v.places) + '</select>'
@@ -282,7 +291,8 @@ function setp(id, key, val) {
   if (key === 'item') pend[id].kz = '';
   // 元と同じに戻したら未保存から外す
   const p = pend[id], same = (p.kind ?? s.kind) === s.kind && (p.item ?? s.itemId) === s.itemId && (p.places ?? placesKey(s)) === placesKey(s)
-    && (p.fix ?? (s.fix || '')) === (s.fix || '') && (p.kz ?? (s.kz || '')) === (s.kz || '') && (p.cancel ?? s.cancelled) === s.cancelled;
+    && (p.fix ?? (s.fix || '')) === (s.fix || '') && (p.kz ?? (s.kz || '')) === (s.kz || '') && (p.cancel ?? s.cancelled) === s.cancelled
+    && (p.rtext ?? (s.rtext || '')) === (s.rtext || '');
   if (same) delete pend[id];
   rerender();
   schedule();
@@ -322,7 +332,7 @@ function updateBar(msg) {
 function snapshot() {
   const edits = Object.keys(pend).map(id => {
     const s = last.shiteki.find(x => x.id === id), p = pend[id];
-    return { id: id, kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled };
+    return { id: id, kind: p.kind ?? s.kind, item: p.item ?? s.itemId, places: p.places ?? placesKey(s), fix: p.fix ?? (s.fix || ''), kz: p.kz ?? (s.kz || ''), cancel: p.cancel ?? s.cancelled, rtext: p.rtext ?? (s.rtext || '') };
   });
   return { edits: edits, adds: adds.slice() };
 }
@@ -350,7 +360,7 @@ async function flush() {
 }
 const saveAll = flush;
 // 文字を入力している最中は画面を書き換えない（入力が終わってから反映）
-function typing() { const a = document.activeElement; return a && app.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'); }
+function typing() { const a = document.activeElement; return a && app.contains(a) && ((a.tagName === 'INPUT' && a.type !== 'file' && a.type !== 'checkbox') || a.tagName === 'TEXTAREA'); }   // v27：写真を選んだあとの欄・チェックは入力中に数えない
 function applyData(d) {
   // 送ったばかりの写真が返事に入っていなくても消さない
   const ids = new Set((d.photos || []).map(x => x.id)), gone = new Set(removedPhotos);
@@ -382,22 +392,28 @@ function tile(x) {
 }
 function upTile(x) { return '<span class="ph up">' + img64(x.thumb) + '<span class="phs">送信待ち</span></span>'; }
 function addTile(to) { return last.editable ? '<label class="addph" title="写真を貼る">＋<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotos(\'' + to + '\', this)"></label>' : ''; }
-function addBtn(to, label) { return last.editable ? '<label class="phadd">' + label + '<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotos(\'' + to + '\', this)"></label>' : ''; }
+function addBtn(to, label) { return last.editable ? '<label class="phadd">' + label + '<input type="file" accept="image/*"' + (to === '__zen' ? '' : ' multiple') + ' style="display:none" onchange="addPhotos(\'' + to + '\', this)"></label>' : ''; }
 function moveBtn(to, label) { return (last.editable && selPh.size) ? '<button class="small" onclick="movePhotos(\'' + to + '\')">' + label + '（' + selPh.size + '枚）</button>' : ''; }
 function photosWhere(f) { return (last.photos || []).filter(f); }
 function photoHtml(sid, extra) {   // 指摘の下（extra：右端に置くボタン）
-  const list = photosWhere(x => !x.good && x.sid === sid), up = upq.filter(x => x.sid === sid);
+  const list = photosWhere(x => !x.good && !x.zen && x.sid === sid), up = upq.filter(x => x.sid === sid);
   if (!list.length && !up.length && !last.editable) return extra ? '<div class="photos">' + extra + '</div>' : '';
   return '<div class="photos">' + '<span class="phcount">写真 ' + (list.length + up.length) + '枚</span>' + list.map(tile).join('') + up.map(upTile).join('') + (selPh.size ? '' : addTile(esc(sid))) + moveBtn(esc(sid), 'ここへ') + (extra || '') + '</div>';
 }
 function trayHtml() {       // まとめて追加・未割当
-  const list = photosWhere(x => !x.good && !x.sid), up = upq.filter(x => x.sid === '');
+  const list = photosWhere(x => !x.good && !x.zen && !x.sid), up = upq.filter(x => x.sid === '');
   if (!list.length && !up.length && !last.editable) return '';
   return '<div class="tray" data-drop=""><div class="muted">未割当の写真' + (list.length ? '（' + list.length + '枚）' + (last.editable ? '：押さえて指摘へ動かす' : '：確定済みのため動かせません') : '') + '</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
     + addBtn('', '📷 写真をまとめて追加') + moveBtn('', '未割当に戻す') + '</div>'
     + (selPh.size ? '<div class="pickbar"><span class="muted">' + selPh.size + '枚を選択中</span><button class="sec small" onclick="clearPick()">選択をやめる</button><button class="sec small" onclick="delSelected()">🗑 外す</button>'
       + ((last.others || []).length ? '<select onchange="toOther(this.value)" style="font:inherit;font-size:13px;max-width:60%"><option value="">別の検査へ移す…</option>' + last.others.map(o => '<option value="' + esc(o.kid) + '">' + esc(o.label) + '</option>').join('') + '</select>' : '')
       + '</div>' : '') + '</div>';
+}
+function zenHtml() {        // 全景（表紙。1枚・任意）：押すと写真を選ぶ。未割当の写真をここへ動かしても入る（89）
+  const list = photosWhere(x => x.zen), up = upq.filter(x => x.sid === '__zen');
+  if (!list.length && !up.length) return last.editable ? '<div data-drop="__zen"><label class="phadd">＋ 全景（表紙）<input type="file" accept="image/*" style="display:none" onchange="addPhotos(\'__zen\', this)"></label>' + moveBtn('__zen', '選んだ写真を全景へ') + '</div>' : '';
+  return '<div data-drop="__zen"><div class="k">全景（表紙）</div><div class="photos">' + list.map(tile).join('') + up.map(upTile).join('')
+    + addBtn('__zen', '📷 選び直す') + moveBtn('__zen', '選んだ写真を全景へ') + '</div></div>';
 }
 function goodHtml() {       // 好例（任意。報告書には載せない）
   const list = photosWhere(x => x.good), up = upq.filter(x => x.sid === '__good');
@@ -425,7 +441,8 @@ async function shrink(file, max, q) {
   } finally { URL.revokeObjectURL(url); }
 }
 async function addPhotos(to, input) {
-  const files = [...input.files]; input.value = '';
+  let files = [...input.files]; input.value = '';
+  if (to === '__zen') { files = files.slice(0, 1); upq = upq.filter(x => x.sid !== '__zen'); }
   for (const f of files) { const thumb = await shrink(f, 200, 0.6).catch(() => ''); upq.push({ sid: to, file: f, thumb: thumb, taken: f.lastModified || '' }); }
   refreshSoon(); pumpUploads();
 }
@@ -439,6 +456,7 @@ async function pumpUploads() {
       const ai = x.sid === '' ? await shrink(x.file, 640, 0.6) : '';
       const d = await postData({ a: 'photo', sid: x.sid, data: data, ai: ai, thumb: x.thumb, taken: x.taken });
       if (!d.ok) throw new Error(d.error || '');
+      if (d.photo.zen) { photosWhere(p => p.zen).forEach(p => removedPhotos.push(p.id)); last.photos = (last.photos || []).filter(p => !p.zen); }
       (last.photos = last.photos || []).push(d.photo);
       if (x.sid === '') newUnassigned++;
       upq.shift();
@@ -460,7 +478,7 @@ async function runAssign() {
     if (!d.ok) throw new Error(d.error || '');
     newUnassigned = 0;
     last.photos = mergePhotos(d.photos);
-    const left = photosWhere(x => !x.good && !x.sid).length;
+    const left = photosWhere(x => !x.good && !x.zen && !x.sid).length;
     flashPhoto('AIが ' + d.assigned + '枚を指摘に振り分けました' + (left ? '（未割当 ' + left + '枚）' : '') + '。違うものは写真を押して付け替えてください');
   } catch (e) { flashPhoto('AIの振り分けができませんでした。未割当の写真を押して、手で振り分けてください'); }
   assigning = false; updateBar(); refreshSoon();
@@ -468,8 +486,9 @@ async function runAssign() {
 function pickPh(id) { if (!last.editable) return; if (selPh.has(id)) selPh.delete(id); else selPh.add(id); refreshSoon(); }
 async function movePhotos(to) {
   const pids = [...selPh]; if (!pids.length) return;
-  const good = to === '__good';
-  photosWhere(x => pids.includes(x.id)).forEach(x => { x.good = good; x.sid = good ? '' : to; x.how = good ? '未割当から好例へ' : (to ? '確認画面で振り分け' : '未割当'); });
+  const good = to === '__good', zen = to === '__zen';
+  if (zen) { pids.splice(1); photosWhere(x => x.zen && x.id !== pids[0]).forEach(x => removedPhotos.push(x.id)); last.photos = (last.photos || []).filter(x => !x.zen || x.id === pids[0]); }
+  photosWhere(x => pids.includes(x.id)).forEach(x => { x.good = good; x.zen = zen; x.sid = (good || zen) ? '' : to; x.how = zen ? '全景に指定' : good ? '未割当から好例へ' : (to ? '確認画面で振り分け' : '未割当'); });
   selPh.clear(); refreshSoon();
   try { const d = await postData({ a: 'photoMove', pids: pids, to: to }); if (!d.ok) throw new Error(d.error || ''); last.photos = mergePhotos(d.photos); refreshSoon(); }
   catch (e) { flashPhoto('写真を移せませんでした。開き直してもう一度お試しください'); }
@@ -568,7 +587,7 @@ async function delPhoto(pid) {
   } catch (e) { alert('外せませんでした。もう一度お試しください。'); }
 }
 // LINEのトークで送った写真（まだAIが見ていない未割当）があれば、開いたときに振り分ける
-function autoAssign() { if (last && last.editable && photosWhere(x => !x.good && !x.sid && !x.judged).length) { newUnassigned = 1; runAssign(); } }
+function autoAssign() { if (last && last.editable && photosWhere(x => !x.good && !x.zen && !x.sid && !x.judged).length) { newUnassigned = 1; runAssign(); } }
 function retryAll() { if (upq.length) pumpUploads(); else if (newUnassigned) runAssign(); if (failed) flush(); }
 
 // ===== v17：上の1枚（物件・工程・点数・検査の切り替え）と「やること」 =====
@@ -579,6 +598,7 @@ function toggleHelp(id) { if (helpOpen.has(id)) helpOpen.delete(id); else helpOp
 function headHtml(d) {
   const sure = d.prop && d.prop.how === '確認済';
   let h = '<div class="head"><div><div class="nm">' + esc(d.name || '（物件名なし）') + '</div><div class="muted">' + esc(d.process) + '　' + esc(d.date) + '</div>'
+    + compHtml(d)
     + (sure && d.editable ? '<button class="sec small" style="margin-top:2px" onclick="toggle(\'prop\')">物件を変更</button>' : '') + '</div>'
     + '<div><div class="sc">' + esc(d.score) + '</div><div class="scl">点（確定前）</div></div></div>';
   if (sure && d.editable) h += propEdit();
@@ -586,6 +606,14 @@ function headHtml(d) {
   if (o.length) h += '<select class="sw" onchange="if(this.value)location.replace(location.pathname+\'?f=\'+encodeURIComponent(this.value))"><option value="">ほかの確定前の検査を開く（' + o.length + '件）</option>'
     + o.map(x => '<option value="' + esc(x.f) + '">' + esc(x.label) + '</option>').join('') + '</select>';
   return h;
+}
+// 同行の検査員（いるときだけ）。件数に数えるかのチェック。名前は出さない（89）
+function compHtml(d) {
+  const c = d.companions || [];
+  if (!c.length) return '';
+  const mk = ['①', '②', '③', '④', '⑤'];
+  return '<div class="muted" style="font-size:13px">' + c.map((x, i) => '<label style="margin-right:10px"><input type="checkbox"' + (x.count ? ' checked' : '') + (d.editable ? '' : ' disabled')
+    + ' onchange="act({a:\'companion\',i:\'' + i + '\',count:this.checked?\'1\':\'0\'})"> 同行' + (c.length > 1 ? mk[i] || (i + 1) : '') + 'を件数に数える</label>').join('') + '</div>';
 }
 function propEdit() {
   return '<div class="edit" id="ed-prop"><label>案件名で探す（ANDPADの案件名）</label><input type="text" id="propq" oninput="propSearch()" placeholder="例：尾川">'
@@ -623,12 +651,24 @@ function holdChoice(c) { app.textContent = '送信中…'; postData({ a: 'dupfil
 function topHtml(d) {
   let h = '';
   if (d.done) h += '<div class="topbox"><b>' + (d.done.state === '確定' ? '確定しました' : '登録完了（承認待ち）') + '</b>　' + esc(d.done.at)
-    + (d.done.url ? '<div><a href="' + esc(d.done.url) + '" target="_blank">書き出したデータ（09_試行）</a></div>' : '') + '</div>';
+    + reportHtml(d.done.report, d.done.state) + '</div>';
   if (d.stopped) h += '<div class="topbox warnbox">この記録書は登録をやめました（消してはいません）。</div>';
   const t = todoItems(d);
   if (t.length) h += '<div class="todo"><h3>やること（' + t.length + '）</h3>' + t.map((x, i) => '<div class="ti">' + (t.length > 1 ? (i + 1) + '. ' : '') + x + '</div>').join('') + '</div>';
   return h;
 }
+// 報告書（87 ⑥）：状態とリンク、別の形で作る
+function reportHtml(r, state) {
+  if (state !== '確定') return '';
+  r = r || {};
+  const st = r.state === '作成済' ? '<a href="' + esc(r.url) + '" target="_blank">報告書（' + esc(r.ver) + '）</a>'
+    : r.state === '依頼中' ? '<span class="muted">報告書を作っています（3〜4分）</span>'
+    : r.andpad === '待ち' ? '<span class="muted">事務担当がANDPAD報告書を入れたら、報告書を作ります</span>'
+    : r.state ? '<span class="muted">報告書：' + esc(r.state) + '（もう一度作るときは下から）</span>' : '<span class="muted">報告書はこれから作ります</span>';
+  return '<div style="margin-top:6px">' + st + '</div><select class="sw" onchange="if(this.value){reportAs(this.value);this.value=\'\'}"><option value="">別の形で作る…</option>'
+    + '<option value="score=yes;mask=0">点数ありで作る</option><option value="score=no;mask=0">点数なしで作る</option><option value="score=auto;mask=1">匿名で作る</option></select>';
+}
+function reportAs(fmt) { act({ a: 'report', fmt: fmt }); }
 function topHtmlOld(d) {
   let h = '';
   if (d.done) h += '<div class="topbox"><b>' + (d.done.state === '確定' ? '確定しました' : '登録完了（承認待ち）') + '</b>　' + esc(d.done.at)
@@ -701,12 +741,22 @@ async function confirmFlow() {
     if (c.pre.block.length) { updateBar(); alertBox('確定の前に、次を済ませてください。', c.pre.block); return; }
     const msg = c.pre.warn.length ? '次の点を確認しました。このまま確定しますか？\n\n・' + c.pre.warn.join('\n・') : '確定しますか？（確定すると直せなくなります）';
     if (!confirm(msg)) { updateBar(); return; }
-    updateBar('確定して書き出しています…（30秒ほどかかることがあります）');
-    const d = await postData({ a: 'confirm' });
-    if (!d.ok) throw new Error(d.error || '');
-    applyData(d); window.scrollTo(0, 0); updateBar();
-  } catch (e) { flashPhoto((e && e.message) || '確定できませんでした。もう一度お試しください'); }
-  finally { const b2 = document.getElementById('cfbtn'); if (b2) b2.disabled = false; }
+    if (b) b.textContent = '登録しています…';
+    updateBar('登録しています…（30秒ほどかかることがあります）');
+    let d = null;
+    try { d = await postData({ a: 'confirm' }); } catch (e) { d = null; }
+    if (!d || !d.ok) {
+      // 返事が届かなかった・すでに確定済みのときは、読み直して今の状態を出す
+      const now = await getData().catch(() => null);
+      if (now && now.done) d = now; else throw new Error((d && d.error) || '登録できませんでした。もう一度お試しください');
+    }
+    if (document.activeElement) document.activeElement.blur();
+    openSet.clear(); renderLater = false;
+    render(d); window.scrollTo(0, 0); updateBar();
+    flashPhoto(d.done && d.done.state === '確定' ? '登録しました（確定）' : '登録しました（承認待ち）');
+    return;
+  } catch (e) { flashPhoto((e && e.message) || '登録できませんでした。もう一度お試しください'); }
+  finally { const b2 = document.getElementById('cfbtn'); if (b2) { b2.disabled = false; b2.textContent = '確定する'; } }
 }
 function alertBox(title, list) {
   const old = document.getElementById('cfmsg'); if (old) old.remove();
