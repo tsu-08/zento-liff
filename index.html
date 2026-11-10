@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>記録書の確認</title>
-<!-- 全棟品質評価 確認画面（LIFF）v28 2026-11-10（v27 から：確定済みで報告書がまだのとき、ANDPAD報告書を待っていれば「ANDPAD報告書が入ったら作ります」と出す（89 v4））
+<meta name="description" content="全棟品質評価の確認画面">
+<meta property="og:title" content="記録書の確認">
+<meta property="og:description" content="全棟品質評価の確認画面">
+<!-- 全棟品質評価 確認画面（LIFF）v29 2026-11-10（v28 から：LINEのリンクの見出しに画面の文字（読み込み中…など）が出ないよう、説明を「全棟品質評価の確認画面」にする）
+     v28 2026-11-10（v27 から：確定済みで報告書がまだのとき、ANDPAD報告書を待っていれば「ANDPAD報告書が入ったら作ります」と出す（89 v4））
      v27 2026-11-10（v26 から：89 鶴岡決定。「＋ 好例（その他）」の上に「＋ 全景（表紙）」（1枚。選び直すと前の写真は外す。未割当の写真を押さえて動かしても入る）。同行の検査員がいるときだけ、上に「件数に数える」のチェック（名前は出さない））
      v26 2026-11-10（v25 から：「直す」に報告書に出す指摘の文の欄（記録書の原文は残す）。確定済みの画面に報告書の状態とリンク、「別の形で作る」（87 ④⑥））
      v25 2026-11-09（v24 から：確定を押したあと、入力欄が開いていても必ず確定済みの画面に切り替える。押している間のボタンは「登録しています…」、確定後は「登録済み（確定）」と出す。返事が途中で切れても読み直して今の状態を出す（11/9 鶴岡））
@@ -134,7 +138,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 28;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 29;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
