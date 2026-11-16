@@ -7,7 +7,8 @@
 <meta name="description" content="全棟品質評価の確認画面">
 <meta property="og:title" content="記録書の確認">
 <meta property="og:description" content="全棟品質評価の確認画面">
-<!-- 全棟品質評価 確認画面（LIFF）v29 2026-11-10（v28 から：LINEのリンクの見出しに画面の文字（読み込み中…など）が出ないよう、説明を「全棟品質評価の確認画面」にする）
+<!-- 全棟品質評価 確認画面（LIFF）v30 2026-11-17（v29 から：11/13 鶴岡。いちばん上に「文字起こし」の欄（件数・見る・＋入れ直す）。開くと一覧と「⇄ 別の検査へ移す」（丸ごと）。新しい文字起こしがあるときだけ「読み直す」。読み直すと、指摘の下に「AIの提案」と 採用／修正／元のまま）
+     v29 2026-11-10（v28 から：LINEのリンクの見出しに画面の文字（読み込み中…など）が出ないよう、説明を「全棟品質評価の確認画面」にする）
      v28 2026-11-10（v27 から：確定済みで報告書がまだのとき、ANDPAD報告書を待っていれば「ANDPAD報告書が入ったら作ります」と出す（89 v4））
      v27 2026-11-10（v26 から：89 鶴岡決定。「＋ 好例（その他）」の上に「＋ 全景（表紙）」（1枚。選び直すと前の写真は外す。未割当の写真を押さえて動かしても入る）。同行の検査員がいるときだけ、上に「件数に数える」のチェック（名前は出さない））
      v26 2026-11-10（v25 から：「直す」に報告書に出す指摘の文の欄（記録書の原文は残す）。確定済みの画面に報告書の状態とリンク、「別の形で作る」（87 ④⑥））
@@ -114,6 +115,15 @@ body.picking .issue .photos{margin-top:2px}
 .wl .ph{width:56px;height:56px}
 .wl .at{position:absolute;bottom:0;left:0;right:0;font-size:10px;text-align:center;background:rgba(0,0,0,.5);color:#fff}
 .fold{cursor:pointer}
+.tx{border:1px solid var(--line);border-radius:10px;margin:10px 0;background:var(--card)}
+.tx .hd{display:flex;align-items:center;gap:6px;padding:2px 6px 2px 10px;min-height:48px}
+.tx .op{flex:1;display:flex;align-items:center;gap:8px;background:none;border:0;color:var(--ink);padding:10px 0;margin:0;text-align:left}
+.tx .cnt{background:var(--new);color:var(--acc);border-radius:999px;padding:0 10px;font-size:13px;font-weight:700}
+.tx .li{padding:8px 10px;border-top:1px solid var(--line);font-size:14px;white-space:pre-line}
+.tx .rr{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--warnbg);border-top:1px solid var(--line);font-size:14px}
+.tx .rr button{margin:0}
+.prop{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--new)}
+.prop .b3{display:flex;gap:6px}.prop .b3 button{flex:1;margin:6px 0 0;padding:8px 4px}
 .issue .l2{color:var(--sub);font-size:13px}
 .more>div{margin-top:8px}.more button{margin-top:0}
 .files{margin:4px 0 0;padding-left:18px}
@@ -138,7 +148,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 29;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 30;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -189,7 +199,7 @@ function render(d) {
     updateBar(); return;
   }
   let h = d.answer ? '<p class="ok">' + esc(d.answer) + '</p>' : '';
-  h += headHtml(d) + topHtml(d);
+  h += headHtml(d) + txHtml() + topHtml(d);
   const isMemo = s => ((pend[s.id] || {}).kind ?? s.kind) === '申し送り';
   const main = d.shiteki.filter(s => !isMemo(s)), memo = d.shiteki.filter(isMemo);
   h += '<div class="sec2"><h2>指摘（' + main.length + '件）</h2>' + qBtn('iss') + '</div>'
@@ -203,7 +213,6 @@ function render(d) {
   if (d.editable) h += '<div><button class="sec small" onclick="toggle(\'new\')">＋ 指摘を追加</button>' + newForm() + '</div>';
   h += zenHtml();
   h += goodHtml();
-  h += filesHtml();
   h += '</div>';
   if (d.editable && !d.stopped) h += '<div style="margin-top:20px"><button id="cfbtn" style="width:100%;padding:12px" onclick="confirmFlow()">確定する</button></div>';
   else if (d.done) h += '<div style="margin-top:20px"><button style="width:100%;padding:12px" disabled>✓ 登録済み（' + (d.done.state === '確定' ? '確定' : '承認待ち') + '）</button></div>';
@@ -232,6 +241,9 @@ function issueHtml(s, isMemo) {   // isMemo：申し送り（内容・写真・�
     + '<div class="t">' + (s.no ? esc(s.no) + '. ' : '') + text + ' ' + tags + '</div>'
     + (isMemo ? '' : '<div class="l2">項目：' + (esc(itemName(v.item)) || '（なし）') + '</div>'
     + '<div class="l2">是正：' + (esc(v.fix) || '（なし）') + '</div>');
+  if (s.prop && last.editable && !isMemo) h += '<div class="prop"><div style="font-size:12px;font-weight:700;color:var(--acc)">AIの提案</div><div>' + esc(s.prop) + '</div>'
+    + '<div class="edit" id="ed-pe' + k + '"><textarea class="txtin" id="pe-' + k + '">' + esc(s.prop) + '</textarea><button class="small" onclick="propDo(\'' + k + '\',\'edit\')">これで決める</button></div>'
+    + '<div class="b3"><button class="small" onclick="propDo(\'' + k + '\',\'take\')">採用</button><button class="sec small" onclick="toggle(\'pe' + k + '\')">修正</button><button class="sec small" onclick="propDo(\'' + k + '\',\'keep\')">元のまま</button></div></div>';
   h += photoHtml(s.id, last.editable ? '<button class="sec small" style="margin:0 0 0 auto" onclick="toggle(\'' + k + '\')">直す</button>' : '');
   if (last.editable) {
     h += ''
@@ -711,6 +723,25 @@ function filesHtml() {
     + (open ? '<ul class="files">' + f.map(x => '<li>' + (x.kind === '音声' ? '🎙 音声' : esc(x.text || '文字起こし'))
       + (last.editable ? ' <button class="sec small" onclick="fileDel(\'' + esc(x.id) + '\')">外す</button>' : '') + '</li>').join('') + '</ul>' : '') + '</div>';
 }
+// 文字起こし（11/13 鶴岡）：いちばん上に1行。開くと一覧と「別の検査へ移す」（丸ごと）。新しい文字起こしがあるときだけ「読み直す」
+function txHtml() {
+  const f = last.files || [], ed = last.editable, open = helpOpen.has('files');
+  if (!f.length && !ed) return '';
+  let h = '<div class="tx"><div class="hd"><button class="op" onclick="toggleFiles()">🎙 <b>文字起こし</b><span class="cnt">' + (f.length ? f.length + '件' : 'なし') + '</span>'
+    + (f.length ? '<span class="muted" style="margin-left:auto">' + (open ? '閉じる' : '見る') + '</span>' : '') + '</button>'
+    + (ed ? '<button class="sec small" style="margin:0" onclick="toggle(\'txt\')">＋ 入れ直す</button>' : '') + '</div>'
+    + (ed ? '<div class="edit" id="ed-txt" style="margin:0 10px 10px"><textarea class="txtin" id="txtin" placeholder="文字起こしを貼り付け"></textarea><button class="small" onclick="addText()">入れる</button></div>' : '');
+  if (open && f.length) {
+    h += f.map(x => '<div class="li">' + (x.kind === '音声' ? '🎙 音声' : esc(x.text || '文字起こし')) + (ed ? ' <button class="sec small" onclick="fileDel(\'' + esc(x.id) + '\')">外す</button>' : '') + '</div>').join('');
+    if (ed && (last.others || []).length) h += '<div class="li" style="text-align:center"><button class="sec small" onclick="toggle(\'mv\')">⇄ 別の検査へ移す</button><div class="edit" id="ed-mv" style="text-align:left">'
+      + last.others.map(o => '<button class="sec small" onclick="filesTo(\'' + esc(o.kid) + '\')">' + esc(o.label) + '</button>').join('') + '</div></div>';
+  }
+  if (ed && last.fresh) h += '<div class="rr"><span style="flex:1">新しい文字起こしがあります</span><button class="small" onclick="reread()">読み直す</button></div>';
+  return h + '</div>';
+}
+function filesTo(kid) { if (!confirm('文字起こし・音声を全部、この検査へ移しますか？')) return; openSet.delete('mv'); act({ a: 'filesToKs', to: kid }); }
+async function reread() { updateBar('AIが読み直しています…（30秒ほど）'); await act({ a: 'reread' }); }
+function propDo(sid, c) { const t = c === 'edit' ? ((document.getElementById('pe-' + sid) || {}).value || '') : ''; openSet.delete('pe' + sid); act({ a: 'propDecide', sid: sid, c: c, text: t }); }
 function toggleFiles() { if (helpOpen.has('files')) helpOpen.delete('files'); else helpOpen.add('files'); rerender(); }
 function addText() { const v = (document.getElementById('txtin') || {}).value || ''; if (!v.trim()) return; openSet.delete('txt'); act({ a: 'addText', text: v }); }
 function propSearch() {
