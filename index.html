@@ -7,7 +7,10 @@
 <meta name="description" content="全棟品質評価の確認画面">
 <meta property="og:title" content="記録書の確認">
 <meta property="og:description" content="全棟品質評価の確認画面">
-<!-- 全棟品質評価 確認画面（LIFF）v35 2026-11-22（v34 から：ToDo。①AIの提案に、文のほか項目・か所数・是正指示の案も出す。「採用」1回で全部に効く ②文字起こしを「別の検査へ移す」：近い確定前の検査3件と「探す」（物件名）。確定済みの検査は薄く出し、選ぶと確認のうえ差し戻してから移す）
+<!-- 全棟品質評価 確認画面（LIFF）v38 2026-11-25（v37 から：11/25 鶴岡 A＋B。押さえて大きくなるまでを0.6秒に延ばす（考えている間に出にくく）。2回続けて押すと大きくしたままにし、どこを押しても戻る（1回押しの「選ぶ」は2回目を待つため0.3秒後））
+     v37 2026-11-25（v36 から：11/25 鶴岡。写真は押さえている間だけ大きく表示し、離すと戻る（ボタンは出さない。一度見た大きい写真は覚えておく）。軽く押すと選ぶ／外す、押さえたまま動かすと指摘へ移す。今までは選んでいる写真があると押しても大きくならなかった）
+     v36 2026-11-25（v35 から：11/25 鶴岡。①「≡ 検査の一覧へ」をいちばん左上に ②「⇄ 別の検査へ移す」を文字起こしの一覧を開かなくても出す ③外した文字起こし・音声を「外した文字起こし」として出し、「この検査に入れる」で入れられる）
+     v35 2026-11-22（v34 から：ToDo。①AIの提案に、文のほか項目・か所数・是正指示の案も出す。「採用」1回で全部に効く ②文字起こしを「別の検査へ移す」：近い確定前の検査3件と「探す」（物件名）。確定済みの検査は薄く出し、選ぶと確認のうえ差し戻してから移す）
      v34 2026-11-22（v33 から：11/22 鶴岡。写真を押すと大きく表示（まず小さい写真、続けて元の写真に差し替え）。そこから「選ぶ（動かす・外す）」。押さえて動かすのは今までどおり。選ぶ画面の写真も押すと大きく見られる。文字起こしの一覧に、受けた時刻を太字で、記録書を受けた時刻との差（○分後）を出す）
      v33 2026-11-22（v32 から：11/22 鶴岡。ボタンを押して返事を待つ間は、画面の真ん中に「処理中…（○秒）」と回る印を出し、ほかを押せないようにする（固まったのか処理中なのか分かるように）。30秒を過ぎたら「時間がかかっています」と出す）
      v32 2026-11-18（v31 から：11/18 鶴岡。開くと最初に「選ぶ画面」：行き先が決まっていない写真（送ったまとまりごと）・文字起こし（押すと全文）・音声に入れる先（推測を選んだ状態）を選んで「入れる」、下に確定前の検査のカード（届いた資料の数・指摘の頭・写真・文字起こしの題）。押した検査を開く。確定前が1件だけで行き先待ちもなければ出さない。LINEで押した検査はいちばん上に目立たせる。検査の中の「ほかの確定前の検査を開く」は「検査の一覧へ」に）
@@ -158,7 +161,7 @@ body.picking .issue .photos{margin-top:2px}
 .hc .hhd{margin-top:4px}
 .hc .htx{margin-top:4px;color:var(--sub);font-size:13px}
 .hc .hto{margin-top:6px;font-size:13px;color:var(--warn)}
-.back{display:block;width:100%;margin:8px 0 0;padding:8px;font-size:14px}
+.back{display:inline-block;width:auto;margin:0 0 8px;padding:6px 12px;font-size:13px}
 .busy{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}
 .busy.on{display:flex}
 .busy .bx{background:var(--card);color:var(--ink);border-radius:12px;padding:18px 22px;min-width:220px;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.3)}
@@ -167,6 +170,7 @@ body.picking .issue .photos{margin-top:2px}
 .busy .sl{font-size:13px;color:var(--warn);margin-top:6px}
 .pv{position:fixed;inset:0;z-index:95;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.88);padding:12px}
 .pv.on{display:flex}
+.pv.peek{pointer-events:none}.pv.peek .pb,.pv.tc .pb{display:none}
 .pv img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:6px;background:#222}
 .pv .pb{display:flex;gap:8px;margin-top:12px}
 .pv .pb button{margin:0}
@@ -178,7 +182,7 @@ body.picking .issue .photos{margin-top:2px}
 <main>
   <div id="app" class="card">読み込み中…</div>
 </main>
-<div class="pv" id="pv" onclick="if(event.target===this)closePv()"><img id="pvImg" alt=""><div class="pm" id="pvMsg"></div><div class="pb"><button id="pvPick" onclick="pvPick()">選ぶ（動かす・外す）</button><button class="sec" style="color:#fff;border-color:#fff" onclick="closePv()">閉じる</button></div></div>
+<div class="pv" id="pv" onclick="if(event.target===this||this.classList.contains('tc'))closePv()"><img id="pvImg" alt=""><div class="pm" id="pvMsg"></div><div class="pb"><button id="pvPick" onclick="pvPick()">選ぶ（動かす・外す）</button><button class="sec" style="color:#fff;border-color:#fff" onclick="closePv()">閉じる</button></div></div>
 <div class="busy" id="busy"><div class="bx"><div class="sp"></div><b id="busyText">処理中…</b><div class="muted" id="busySec"></div><div class="sl" id="busySlow"></div></div></div>
 <div class="trash" id="trash" data-drop="__trash">🗑 別のフォルダへ移動</div>
 <div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" id="retryBtn" onclick="retryAll()" style="display:none">もう一度送る</button></span></div></div>
@@ -192,7 +196,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 35;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 38;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -242,12 +246,14 @@ function render(d) {
       : (['受付', '読取中'].indexOf(d.state) >= 0 ? '<button onclick="load()">更新</button>' : ''));
     updateBar(); return;
   }
-  let h = d.answer ? '<p class="ok">' + esc(d.answer) + '</p>' : '';
+  const o = d.others || [];
+  let h = (o.length || d.waiting > 0) ? '<button class="sec back" onclick="goHome()">≡ 検査の一覧へ（ほかの確定前 ' + o.length + '件' + (d.waiting > 0 ? '・行き先待ち ' + d.waiting + '件' : '') + '）</button>' : '';
+  h += d.answer ? '<p class="ok">' + esc(d.answer) + '</p>' : '';
   h += headHtml(d) + txHtml() + topHtml(d);
   const isMemo = s => ((pend[s.id] || {}).kind ?? s.kind) === '申し送り';
   const main = d.shiteki.filter(s => !isMemo(s)), memo = d.shiteki.filter(isMemo);
   h += '<div class="sec2"><h2>指摘（' + main.length + '件）</h2>' + qBtn('iss') + '</div>'
-    + helpBox('iss', '直すところは「直す」を押して変えます（数秒後に自動で保存。閉じたときも送ります）。写真は押さえたまま指摘まで動かすか、押して選んでから「ここへ」で移せます。写真はLINEのトークに送っても入ります。')
+    + helpBox('iss', '直すところは「直す」を押して変えます（数秒後に自動で保存。閉じたときも送ります）。写真は押さえている間だけ大きく表示します（離すと戻ります）。2回続けて押すと大きいままになり、どこかを押すと戻ります。押さえたまま指摘まで動かすか、軽く押して選んでから「ここへ」で移せます。写真はLINEのトークに送っても入ります。')
     + trayHtml();
   main.forEach(s => { h += issueHtml(s); });
   if (memo.length) { h += '<div class="sec2"><h2>申し送り（' + memo.length + '件）</h2></div>'; memo.forEach(s => { h += issueHtml(s, true); }); }
@@ -577,12 +583,15 @@ function phDown(e, id) {
   if (e.pointerType !== 'mouse') e.preventDefault();
   drag = { id: id, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, moved: false, lifted: false, ghost: null, src: e.currentTarget };
   try { e.currentTarget.setPointerCapture(e.pointerId); } catch (er) { }
-  drag.timer = setTimeout(function () { if (drag && !drag.lifted) liftPh(); }, 250);
+  drag.timer = setTimeout(function () { if (drag && !drag.lifted && !drag.moved) { drag.peek = true; openPv(drag.id, false, null, true); } }, 600);   // v37：押さえている間だけ大きく
 }
 // 写真を大きく見る（v34）：まず手元の小さい写真、続けて元の写真
 let pvId = '', pvSeq = 0;
-function openPv(id, canPick, b64) {
+const pvCache = {};
+function openPv(id, canPick, b64, peek) {
   pvId = id; const seq = ++pvSeq;
+  document.getElementById('pv').classList.toggle('peek', peek === true);
+  document.getElementById('pv').classList.toggle('tc', peek === 'tap');
   const x = ((last && last.photos) || []).find(p => p.id === id);
   const img = document.getElementById('pvImg');
   const th = b64 || (x && x.thumb) || '';
@@ -591,9 +600,11 @@ function openPv(id, canPick, b64) {
   document.getElementById('pvMsg').textContent = id ? '大きい写真を読み込んでいます…' : '';
   document.getElementById('pv').classList.add('on');
   if (!id) return;
+  if (pvCache[id]) { img.src = pvCache[id]; document.getElementById('pvMsg').textContent = ''; return; }
   postData({ a: 'photoBig', pid: id }).then(d => {
+    if (d && d.ok) pvCache[id] = 'data:' + (d.type || 'image/jpeg') + ';base64,' + d.data;
     if (seq !== pvSeq) return;
-    if (d && d.ok) { img.src = 'data:' + (d.type || 'image/jpeg') + ';base64,' + d.data; document.getElementById('pvMsg').textContent = ''; }
+    if (d && d.ok) { img.src = pvCache[id]; document.getElementById('pvMsg').textContent = ''; }
     else document.getElementById('pvMsg').textContent = '大きい写真を読めませんでした（小さい写真を表示中）';
   }).catch(() => { if (seq === pvSeq) document.getElementById('pvMsg').textContent = '大きい写真を読めませんでした（小さい写真を表示中）'; });
 }
@@ -616,8 +627,8 @@ function liftPh() {
 function phMove(e) {
   if (!drag) return;
   drag.cx = e.clientX; drag.cy = e.clientY;
-  if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) >= 8) drag.moved = true;
-  if (!drag.lifted) { if (!drag.moved) return; clearTimeout(drag.timer); liftPh(); }
+  if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) >= (drag.peek ? 16 : 8)) drag.moved = true;   // 大きく見ている間は指の揺れで動き出さないように
+  if (!drag.lifted) { if (!drag.moved) return; clearTimeout(drag.timer); if (drag.peek) { drag.peek = false; closePv(); } liftPh(); }
   e.preventDefault();
   drag.ghost.style.left = (e.clientX - 32) + 'px'; drag.ghost.style.top = (e.clientY - 32) + 'px';
   markHover();
@@ -643,14 +654,17 @@ function endDrag() {
 function phUp(e) {
   if (!drag) return;
   const d = drag;
-  if (!d.lifted) { clearTimeout(d.timer); drag = null; if (selPh.size) pickPh(d.id); else openPv(d.id, true); return; }   // 何も選んでいなければ大きく見る（v34）。選んでいる間は押すと選ぶ
+  if (!d.lifted) { clearTimeout(d.timer); drag = null; if (d.peek) { closePv(); return; }
+    if (lastTap.id === d.id) { clearTimeout(lastTap.timer); lastTap = {}; openPv(d.id, false, null, 'tap'); return; }   // v38：2回続けて押した → 選ばずに、大きいままにする
+    clearTimeout(lastTap.timer); lastTap = { id: d.id, timer: setTimeout(() => { lastTap = {}; pickPh(d.id); }, 300) }; return; }   // 1回だけなら0.3秒待って選ぶ（2回目を待つため。画面がずれて2回目が外れないように）   // v37：押さえていた（大きく見た）なら戻すだけ。軽く押したら選ぶ／外す
   if (!d.moved) { endDrag(); drag = null; refreshSoon(); return; }   // 持ち上げただけで離した → 選んだままにする
   const z = dropAt(e.clientX, e.clientY);
   endDrag(); drag = null; renderLater = false;
   if (z && z.dataset.drop === '__trash') delPhotos([...selPh]);
   else if (z) movePhotos(z.dataset.drop); else rerender();
 }
-function phCancel() { if (!drag) return; endDrag(); drag = null; rerender(); }
+let lastTap = {};
+function phCancel() { if (!drag) return; if (drag.peek) closePv(); endDrag(); drag = null; rerender(); }
 // ゴミ箱へ落とした・「外す」を押した写真を外す（消さずに「05_外した写真」へ移す）
 async function delPhotos(pids) {
   if (!pids.length) return;
@@ -691,7 +705,6 @@ function headHtml(d) {
     + '<div><div class="sc">' + esc(d.score) + '</div><div class="scl">点（確定前）</div></div></div>';
   if (sure && d.editable) h += propEdit();
   const o = d.others || [];
-  if (o.length || d.waiting > 0) h += '<button class="sec back" onclick="goHome()">≡ 検査の一覧へ（ほかの確定前 ' + o.length + '件' + (d.waiting > 0 ? '・行き先待ち ' + d.waiting + '件' : '') + '）</button>';
   return h;
 }
 // 同行の検査員（いるときだけ）。件数に数えるかのチェック。名前は出さない（89）
@@ -811,8 +824,19 @@ function txHtml() {
         : '<button class="op2" onclick="toggleTx(\'' + esc(x.id) + '\')"><b>' + esc(x.title || '文字起こし') + '</b>'
           + (txOpen.has(x.id) ? '<div class="tbody">' + esc(x.body || x.text) + '</div>' : (x.text ? '<div class="tprev">' + esc(x.text) + '</div>' : '')) + '</button>')
       + del(x) + '</div></div>').join('');
-    if (ed && (last.moveCands || []).length) h += '<div class="li" style="text-align:center"><button class="sec small" onclick="toggle(\'mv\')">⇄ 別の検査へ移す</button><div class="edit" id="ed-mv" style="text-align:left">'
-      + '<div id="mvlist">' + mvItems() + '</div><input type="text" id="mvq" placeholder="🔍 探す（物件名）" value="' + esc(mvQ) + '" oninput="mvQ=this.value;mvRefresh()" style="margin-top:6px"></div></div>';
+  }
+  if (ed && f.length && (last.moveCands || []).length) h += '<div class="li" style="text-align:center"><button class="sec small" onclick="toggle(\'mv\')">⇄ 別の検査へ移す</button><div class="edit" id="ed-mv" style="text-align:left">'
+    + '<div id="mvlist">' + mvItems() + '</div><input type="text" id="mvq" placeholder="🔍 探す（物件名）" value="' + esc(mvQ) + '" oninput="mvQ=this.value;mvRefresh()" style="margin-top:6px"></div></div>';
+  const xo = last.txOut || [];
+  if (ed && xo.length) {
+    h += '<div class="li"><button class="op" onclick="toggle(\'txo\')"><span class="muted">外した文字起こし（' + xo.length + '）▼ 押すと一覧</span></button><div class="edit" id="ed-txo">'
+      + '<div class="muted" style="font-size:12px;margin-bottom:4px">ほかの検査から外したものです。この検査の分なら「この検査に入れる」を押してください。</div>'
+      + xo.map(x => '<div class="li" style="padding-left:0;padding-right:0"><div class="muted"><b>' + esc(x.at || '時刻不明') + '</b> 受付' + (x.from ? '　外した元：' + esc(x.from) : '') + '</div><div class="row2">'
+        + (x.kind === '音声' ? '<span style="flex:1">🎙 音声</span>'
+          : '<button class="op2" onclick="toggleTx(\'' + esc(x.id) + '\')"><b>' + esc(x.title || '文字起こし') + '</b>'
+            + (txOpen.has(x.id) ? '<div class="tbody">' + esc(x.body || x.text) + '</div>' : (x.text ? '<div class="tprev">' + esc(x.text) + '</div>' : '')) + '</button>')
+        + '<button class="small" onclick="txIn(\'' + esc(x.id) + '\')">この検査に入れる</button></div></div>').join('')
+      + '</div></div>';
   }
   if (ed && last.fresh) h += '<div class="rr"><span style="flex:1">新しい文字起こしがあります</span><button class="small" onclick="reread()">読み直す</button></div>';
   return h + '</div>';
@@ -827,6 +851,7 @@ function mvItems() {
   return '<div class="muted" style="font-size:12px;margin-bottom:4px">' + (q ? '探した結果（確定済みは薄く表示）' : '受けた時刻が近い、確定前の検査') + '</div>'
     + (list.length ? list.map(o => '<button class="sec small" style="display:block;width:100%;text-align:left;margin:4px 0' + (o.conf ? ';opacity:.5' : '') + '" onclick="filesTo(\'' + esc(o.kid) + '\',' + (o.conf ? 1 : 0) + ')">' + esc(o.label) + (o.conf ? '（確定済み）' : '') + '</button>').join('') : '<div class="muted">見つかりません。下の「探す」に物件名を入れてください</div>');
 }
+function txIn(aid) { if (!confirm('この文字起こし（音声）をこの検査に入れますか？')) return; openSet.delete('txo'); act({ a: 'txIn', aid: aid }); }
 function mvRefresh() { const el = document.getElementById('mvlist'); if (el) el.innerHTML = mvItems(); }
 function filesTo(kid, conf) {
   if (conf) { if (!confirm('この検査は確定済みです。差し戻してから、文字起こし・音声を全部この検査へ移しますか？\n（移した先はもう一度確定が必要です。報告書は確定し直すと作り直します）')) return; }
