@@ -7,7 +7,12 @@
 <meta name="description" content="全棟品質評価の確認画面">
 <meta property="og:title" content="記録書の確認">
 <meta property="og:description" content="全棟品質評価の確認画面">
-<!-- 全棟品質評価 確認画面（LIFF）v30 2026-11-17（v29 から：11/13 鶴岡。いちばん上に「文字起こし」の欄（件数・見る・＋入れ直す）。開くと一覧と「⇄ 別の検査へ移す」（丸ごと）。新しい文字起こしがあるときだけ「読み直す」。読み直すと、指摘の下に「AIの提案」と 採用／修正／元のまま）
+<!-- 全棟品質評価 確認画面（LIFF）v35 2026-11-22（v34 から：ToDo。①AIの提案に、文のほか項目・か所数・是正指示の案も出す。「採用」1回で全部に効く ②文字起こしを「別の検査へ移す」：近い確定前の検査3件と「探す」（物件名）。確定済みの検査は薄く出し、選ぶと確認のうえ差し戻してから移す）
+     v34 2026-11-22（v33 から：11/22 鶴岡。写真を押すと大きく表示（まず小さい写真、続けて元の写真に差し替え）。そこから「選ぶ（動かす・外す）」。押さえて動かすのは今までどおり。選ぶ画面の写真も押すと大きく見られる。文字起こしの一覧に、受けた時刻を太字で、記録書を受けた時刻との差（○分後）を出す）
+     v33 2026-11-22（v32 から：11/22 鶴岡。ボタンを押して返事を待つ間は、画面の真ん中に「処理中…（○秒）」と回る印を出し、ほかを押せないようにする（固まったのか処理中なのか分かるように）。30秒を過ぎたら「時間がかかっています」と出す）
+     v32 2026-11-18（v31 から：11/18 鶴岡。開くと最初に「選ぶ画面」：行き先が決まっていない写真（送ったまとまりごと）・文字起こし（押すと全文）・音声に入れる先（推測を選んだ状態）を選んで「入れる」、下に確定前の検査のカード（届いた資料の数・指摘の頭・写真・文字起こしの題）。押した検査を開く。確定前が1件だけで行き先待ちもなければ出さない。LINEで押した検査はいちばん上に目立たせる。検査の中の「ほかの確定前の検査を開く」は「検査の一覧へ」に）
+     v31 2026-11-17（v30 から：文字起こしの一覧に、受けた日時・題・本文の頭。押すと全文が開く（何の文字起こしか分かるように。11/17 鶴岡））
+     v30 2026-11-17（v29 から：11/13 鶴岡。いちばん上に「文字起こし」の欄（件数・見る・＋入れ直す）。開くと一覧と「⇄ 別の検査へ移す」（丸ごと）。新しい文字起こしがあるときだけ「読み直す」。読み直すと、指摘の下に「AIの提案」と 採用／修正／元のまま）
      v29 2026-11-10（v28 から：LINEのリンクの見出しに画面の文字（読み込み中…など）が出ないよう、説明を「全棟品質評価の確認画面」にする）
      v28 2026-11-10（v27 から：確定済みで報告書がまだのとき、ANDPAD報告書を待っていれば「ANDPAD報告書が入ったら作ります」と出す（89 v4））
      v27 2026-11-10（v26 から：89 鶴岡決定。「＋ 好例（その他）」の上に「＋ 全景（表紙）」（1枚。選び直すと前の写真は外す。未割当の写真を押さえて動かしても入る）。同行の検査員がいるときだけ、上に「件数に数える」のチェック（名前は出さない））
@@ -122,6 +127,11 @@ body.picking .issue .photos{margin-top:2px}
 .tx .li{padding:8px 10px;border-top:1px solid var(--line);font-size:14px;white-space:pre-line}
 .tx .rr{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--warnbg);border-top:1px solid var(--line);font-size:14px}
 .tx .rr button{margin:0}
+.tx .li .row2{display:flex;align-items:flex-start;gap:6px}
+.tx .op2{flex:1;display:block;background:none;border:0;color:var(--ink);text-align:left;padding:0;margin:0;font-size:14px}
+.tx .tprev{color:var(--sub);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+.tx .tbody{font-size:13px;white-space:pre-line;max-height:50vh;overflow:auto;margin-top:4px;color:var(--ink)}
+.tx .li .row2 button.sec{margin:0}
 .prop{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--new)}
 .prop .b3{display:flex;gap:6px}.prop .b3 button{flex:1;margin:6px 0 0;padding:8px 4px}
 .issue .l2{color:var(--sub);font-size:13px}
@@ -129,6 +139,38 @@ body.picking .issue .photos{margin-top:2px}
 .files{margin:4px 0 0;padding-left:18px}
 .memo{margin:0 0 14px;padding-left:20px}.memo li{margin:4px 0}
 .txtin{width:100%;min-height:90px;font:inherit;font-size:14px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+.hw{border:1px solid var(--warn);background:var(--warnbg);border-radius:10px;padding:10px;margin:8px 0}
+.hw .op2{display:block;width:100%;background:none;border:0;color:var(--ink);text-align:left;padding:0;margin:4px 0;font-size:14px}
+.hw .tprev,.hc .tprev{color:var(--sub);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hw .tbody{font-size:13px;white-space:pre-line;max-height:50vh;overflow:auto;margin-top:4px}
+.hmv{display:flex;gap:6px;align-items:center;margin-top:8px}
+.hmv select{flex:1;min-width:0;font:inherit;font-size:14px;padding:8px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+.hmv button{margin:0;padding:8px 14px}
+.hth{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center}
+.hth .ph{width:52px;height:52px;cursor:default}
+.hth .more{font-size:13px;color:var(--sub);margin-left:4px}
+.hc{display:block;width:100%;text-align:left;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 10px;font-size:14px}
+.hc.cur{border:2px solid var(--acc);background:var(--new)}
+.hc .hcur{font-size:12px;color:var(--acc);font-weight:700}
+.hc .hrow{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.hc .hnm{font-size:17px;line-height:1.4}
+.hc .hsc{font-size:22px;font-weight:700;color:var(--acc);white-space:nowrap}.hc .hsc small{font-size:11px;font-weight:400}
+.hc .hhd{margin-top:4px}
+.hc .htx{margin-top:4px;color:var(--sub);font-size:13px}
+.hc .hto{margin-top:6px;font-size:13px;color:var(--warn)}
+.back{display:block;width:100%;margin:8px 0 0;padding:8px;font-size:14px}
+.busy{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}
+.busy.on{display:flex}
+.busy .bx{background:var(--card);color:var(--ink);border-radius:12px;padding:18px 22px;min-width:220px;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.3)}
+.busy .sp{width:36px;height:36px;margin:0 auto 10px;border:4px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.busy .sl{font-size:13px;color:var(--warn);margin-top:6px}
+.pv{position:fixed;inset:0;z-index:95;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.88);padding:12px}
+.pv.on{display:flex}
+.pv img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:6px;background:#222}
+.pv .pb{display:flex;gap:8px;margin-top:12px}
+.pv .pb button{margin:0}
+.pv .pm{color:#ddd;font-size:12px;margin-top:6px;min-height:16px}
 .addph{display:inline-flex;width:40px;height:40px;align-items:center;justify-content:center;border:1px dashed var(--acc);border-radius:6px;color:var(--acc);font-size:18px;cursor:pointer}
 </style>
 </head>
@@ -136,6 +178,8 @@ body.picking .issue .photos{margin-top:2px}
 <main>
   <div id="app" class="card">読み込み中…</div>
 </main>
+<div class="pv" id="pv" onclick="if(event.target===this)closePv()"><img id="pvImg" alt=""><div class="pm" id="pvMsg"></div><div class="pb"><button id="pvPick" onclick="pvPick()">選ぶ（動かす・外す）</button><button class="sec" style="color:#fff;border-color:#fff" onclick="closePv()">閉じる</button></div></div>
+<div class="busy" id="busy"><div class="bx"><div class="sp"></div><b id="busyText">処理中…</b><div class="muted" id="busySec"></div><div class="sl" id="busySlow"></div></div></div>
 <div class="trash" id="trash" data-drop="__trash">🗑 別のフォルダへ移動</div>
 <div class="bar" id="bar"><div class="in"><span id="barText"></span><span><button class="sec small" id="retryBtn" onclick="retryAll()" style="display:none">もう一度送る</button></span></div></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -148,7 +192,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 30;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 35;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -241,9 +285,16 @@ function issueHtml(s, isMemo) {   // isMemo：申し送り（内容・写真・�
     + '<div class="t">' + (s.no ? esc(s.no) + '. ' : '') + text + ' ' + tags + '</div>'
     + (isMemo ? '' : '<div class="l2">項目：' + (esc(itemName(v.item)) || '（なし）') + '</div>'
     + '<div class="l2">是正：' + (esc(v.fix) || '（なし）') + '</div>');
-  if (s.prop && last.editable && !isMemo) h += '<div class="prop"><div style="font-size:12px;font-weight:700;color:var(--acc)">AIの提案</div><div>' + esc(s.prop) + '</div>'
-    + '<div class="edit" id="ed-pe' + k + '"><textarea class="txtin" id="pe-' + k + '">' + esc(s.prop) + '</textarea><button class="small" onclick="propDo(\'' + k + '\',\'edit\')">これで決める</button></div>'
+  if (s.prop && last.editable && !isMemo) {
+    const p2 = s.prop2 || {}, keepT = s.prop === '（文はそのまま）', base = keepT ? (s.rtext || s.text || '') : s.prop;
+    h += '<div class="prop"><div style="font-size:12px;font-weight:700;color:var(--acc)">AIの提案</div>'
+    + (keepT ? '' : '<div>' + esc(s.prop) + '</div>')
+    + (p2.item ? '<div class="l2">項目：' + esc(p2.itemName || p2.item) + '（今：' + (esc(itemName(v.item)) || 'なし') + '）</div>' : '')
+    + (p2.places ? '<div class="l2">か所数：' + (p2.places === '3+' ? '3か所以上' : esc(p2.places) + 'か所') + '</div>' : '')
+    + (p2.fix ? '<div class="l2">是正：' + esc(p2.fix) + '</div>' : '')
+    + '<div class="edit" id="ed-pe' + k + '"><textarea class="txtin" id="pe-' + k + '">' + esc(base) + '</textarea><button class="small" onclick="propDo(\'' + k + '\',\'edit\')">これで決める</button></div>'
     + '<div class="b3"><button class="small" onclick="propDo(\'' + k + '\',\'take\')">採用</button><button class="sec small" onclick="toggle(\'pe' + k + '\')">修正</button><button class="sec small" onclick="propDo(\'' + k + '\',\'keep\')">元のまま</button></div></div>';
+  }
   h += photoHtml(s.id, last.editable ? '<button class="sec small" style="margin:0 0 0 auto" onclick="toggle(\'' + k + '\')">直す</button>' : '');
   if (last.editable) {
     h += ''
@@ -521,12 +572,33 @@ function clearPick() { selPh.clear(); refreshSoon(); }
 let drag = null, scrollTimer = null;
 // v16：Android では写真を押さえると端末が画像そのものを掴もうとして動きが止まっていた → 画像を掴ませず、0.35秒押さえたら持ち上げる
 function phDown(e, id) {
-  if (!last.editable || e.button > 0) return;
+  if (!last.editable) { openPv(id, false); return; }
+  if (e.button > 0) return;
   if (e.pointerType !== 'mouse') e.preventDefault();
   drag = { id: id, x: e.clientX, y: e.clientY, cx: e.clientX, cy: e.clientY, moved: false, lifted: false, ghost: null, src: e.currentTarget };
   try { e.currentTarget.setPointerCapture(e.pointerId); } catch (er) { }
   drag.timer = setTimeout(function () { if (drag && !drag.lifted) liftPh(); }, 250);
 }
+// 写真を大きく見る（v34）：まず手元の小さい写真、続けて元の写真
+let pvId = '', pvSeq = 0;
+function openPv(id, canPick, b64) {
+  pvId = id; const seq = ++pvSeq;
+  const x = ((last && last.photos) || []).find(p => p.id === id);
+  const img = document.getElementById('pvImg');
+  const th = b64 || (x && x.thumb) || '';
+  img.src = th ? 'data:image/jpeg;base64,' + th : '';
+  document.getElementById('pvPick').style.display = canPick ? '' : 'none';
+  document.getElementById('pvMsg').textContent = id ? '大きい写真を読み込んでいます…' : '';
+  document.getElementById('pv').classList.add('on');
+  if (!id) return;
+  postData({ a: 'photoBig', pid: id }).then(d => {
+    if (seq !== pvSeq) return;
+    if (d && d.ok) { img.src = 'data:' + (d.type || 'image/jpeg') + ';base64,' + d.data; document.getElementById('pvMsg').textContent = ''; }
+    else document.getElementById('pvMsg').textContent = '大きい写真を読めませんでした（小さい写真を表示中）';
+  }).catch(() => { if (seq === pvSeq) document.getElementById('pvMsg').textContent = '大きい写真を読めませんでした（小さい写真を表示中）'; });
+}
+function closePv() { pvSeq++; document.getElementById('pv').classList.remove('on'); }
+function pvPick() { const id = pvId; closePv(); if (id) pickPh(id); }
 function liftPh() {
   drag.lifted = true;
   if (!selPh.has(drag.id)) selPh.add(drag.id);
@@ -571,7 +643,7 @@ function endDrag() {
 function phUp(e) {
   if (!drag) return;
   const d = drag;
-  if (!d.lifted) { clearTimeout(d.timer); drag = null; pickPh(d.id); return; }
+  if (!d.lifted) { clearTimeout(d.timer); drag = null; if (selPh.size) pickPh(d.id); else openPv(d.id, true); return; }   // 何も選んでいなければ大きく見る（v34）。選んでいる間は押すと選ぶ
   if (!d.moved) { endDrag(); drag = null; refreshSoon(); return; }   // 持ち上げただけで離した → 選んだままにする
   const z = dropAt(e.clientX, e.clientY);
   endDrag(); drag = null; renderLater = false;
@@ -619,8 +691,7 @@ function headHtml(d) {
     + '<div><div class="sc">' + esc(d.score) + '</div><div class="scl">点（確定前）</div></div></div>';
   if (sure && d.editable) h += propEdit();
   const o = d.others || [];
-  if (o.length) h += '<select class="sw" onchange="if(this.value)location.replace(location.pathname+\'?f=\'+encodeURIComponent(this.value))"><option value="">ほかの確定前の検査を開く（' + o.length + '件）</option>'
-    + o.map(x => '<option value="' + esc(x.f) + '">' + esc(x.label) + '</option>').join('') + '</select>';
+  if (o.length || d.waiting > 0) h += '<button class="sec back" onclick="goHome()">≡ 検査の一覧へ（ほかの確定前 ' + o.length + '件' + (d.waiting > 0 ? '・行き先待ち ' + d.waiting + '件' : '') + '）</button>';
   return h;
 }
 // 同行の検査員（いるときだけ）。件数に数えるかのチェック。名前は出さない（89）
@@ -732,15 +803,38 @@ function txHtml() {
     + (ed ? '<button class="sec small" style="margin:0" onclick="toggle(\'txt\')">＋ 入れ直す</button>' : '') + '</div>'
     + (ed ? '<div class="edit" id="ed-txt" style="margin:0 10px 10px"><textarea class="txtin" id="txtin" placeholder="文字起こしを貼り付け"></textarea><button class="small" onclick="addText()">入れる</button></div>' : '');
   if (open && f.length) {
-    h += f.map(x => '<div class="li">' + (x.kind === '音声' ? '🎙 音声' : esc(x.text || '文字起こし')) + (ed ? ' <button class="sec small" onclick="fileDel(\'' + esc(x.id) + '\')">外す</button>' : '') + '</div>').join('');
-    if (ed && (last.others || []).length) h += '<div class="li" style="text-align:center"><button class="sec small" onclick="toggle(\'mv\')">⇄ 別の検査へ移す</button><div class="edit" id="ed-mv" style="text-align:left">'
-      + last.others.map(o => '<button class="sec small" onclick="filesTo(\'' + esc(o.kid) + '\')">' + esc(o.label) + '</button>').join('') + '</div></div>';
+    const del = x => ed ? '<button class="sec small" onclick="fileDel(\'' + esc(x.id) + '\')">外す</button>' : '';
+    const gap = x => { if (!x.t || !last.recvT) return ''; const m = Math.round((x.t - last.recvT) / 60000); return m >= 0 ? '（記録書の' + (m < 60 ? m + '分' : Math.floor(m / 60) + '時間' + (m % 60) + '分') + '後）' : '（記録書の' + (-m < 60 ? -m + '分' : Math.floor(-m / 60) + '時間' + (-m % 60) + '分') + '前）'; };
+    if (last.recvAt) h += '<div class="li muted">この検査の記録書を受けた時刻：' + esc(last.recvAt) + '</div>';
+    h += f.map(x => '<div class="li"><div class="muted"><b>' + esc(x.at || '時刻不明') + '</b> 受付' + gap(x) + '</div><div class="row2">'
+      + (x.kind === '音声' ? '<span style="flex:1">🎙 音声</span>'
+        : '<button class="op2" onclick="toggleTx(\'' + esc(x.id) + '\')"><b>' + esc(x.title || '文字起こし') + '</b>'
+          + (txOpen.has(x.id) ? '<div class="tbody">' + esc(x.body || x.text) + '</div>' : (x.text ? '<div class="tprev">' + esc(x.text) + '</div>' : '')) + '</button>')
+      + del(x) + '</div></div>').join('');
+    if (ed && (last.moveCands || []).length) h += '<div class="li" style="text-align:center"><button class="sec small" onclick="toggle(\'mv\')">⇄ 別の検査へ移す</button><div class="edit" id="ed-mv" style="text-align:left">'
+      + '<div id="mvlist">' + mvItems() + '</div><input type="text" id="mvq" placeholder="🔍 探す（物件名）" value="' + esc(mvQ) + '" oninput="mvQ=this.value;mvRefresh()" style="margin-top:6px"></div></div>';
   }
   if (ed && last.fresh) h += '<div class="rr"><span style="flex:1">新しい文字起こしがあります</span><button class="small" onclick="reread()">読み直す</button></div>';
   return h + '</div>';
 }
-function filesTo(kid) { if (!confirm('文字起こし・音声を全部、この検査へ移しますか？')) return; openSet.delete('mv'); act({ a: 'filesToKs', to: kid }); }
+const txOpen = new Set();
+function toggleTx(id) { if (txOpen.has(id)) txOpen.delete(id); else txOpen.add(id); refreshSoon(); }
+// 移す先（v35）：何も入れていなければ近い確定前の3件、「探す」に入れたら物件名で（確定済みも薄く出す）
+let mvQ = '';
+function mvItems() {
+  const c = last.moveCands || [], q = mvQ.trim();
+  const list = q ? c.filter(o => (o.label + ' ' + (o.name || '')).indexOf(q) >= 0).slice(0, 10) : c.filter(o => !o.conf).slice(0, 3);
+  return '<div class="muted" style="font-size:12px;margin-bottom:4px">' + (q ? '探した結果（確定済みは薄く表示）' : '受けた時刻が近い、確定前の検査') + '</div>'
+    + (list.length ? list.map(o => '<button class="sec small" style="display:block;width:100%;text-align:left;margin:4px 0' + (o.conf ? ';opacity:.5' : '') + '" onclick="filesTo(\'' + esc(o.kid) + '\',' + (o.conf ? 1 : 0) + ')">' + esc(o.label) + (o.conf ? '（確定済み）' : '') + '</button>').join('') : '<div class="muted">見つかりません。下の「探す」に物件名を入れてください</div>');
+}
+function mvRefresh() { const el = document.getElementById('mvlist'); if (el) el.innerHTML = mvItems(); }
+function filesTo(kid, conf) {
+  if (conf) { if (!confirm('この検査は確定済みです。差し戻してから、文字起こし・音声を全部この検査へ移しますか？\n（移した先はもう一度確定が必要です。報告書は確定し直すと作り直します）')) return; }
+  else if (!confirm('文字起こし・音声を全部、この検査へ移しますか？')) return;
+  openSet.delete('mv'); mvQ = ''; act({ a: 'filesToKs', to: kid, reject: conf ? 1 : 0 });
+}
 async function reread() { updateBar('AIが読み直しています…（30秒ほど）'); await act({ a: 'reread' }); }
+window.addEventListener('pageshow', () => busy(false));
 function propDo(sid, c) { const t = c === 'edit' ? ((document.getElementById('pe-' + sid) || {}).value || '') : ''; openSet.delete('pe' + sid); act({ a: 'propDecide', sid: sid, c: c, text: t }); }
 function toggleFiles() { if (helpOpen.has('files')) helpOpen.delete('files'); else helpOpen.add('files'); rerender(); }
 function addText() { const v = (document.getElementById('txtin') || {}).value || ''; if (!v.trim()) return; openSet.delete('txt'); act({ a: 'addText', text: v }); }
@@ -751,10 +845,21 @@ function propSearch() {
   const hit = (last.props || []).filter(p => String(p.name).replace(/\s|　/g, '').indexOf(q) >= 0).slice(-8).reverse();
   box.innerHTML = hit.length ? hit.map(p => '<button class="sec small" onclick="setProp(\'' + esc(p.id) + '\')">' + esc(p.name) + '</button>').join('') : '<div class="muted">当たる物件がありません</div>';
 }
+// 処理中の印（v33）：返事を待つ間は真ん中に出し、ほかを押せないようにする
+let busyT = null, busyAt = 0;
+function busy(on, msg) {
+  const el = document.getElementById('busy'); if (!el) return;
+  clearInterval(busyT);
+  if (!on) { el.classList.remove('on'); return; }
+  busyAt = Date.now();
+  document.getElementById('busyText').textContent = msg || '処理中…';
+  const tick = () => { const s = Math.floor((Date.now() - busyAt) / 1000); document.getElementById('busySec').textContent = s + '秒'; document.getElementById('busySlow').textContent = s >= 30 ? '時間がかかっています。そのままお待ちください（2分たっても終わらなければ、閉じて開き直してください）' : ''; };
+  tick(); busyT = setInterval(tick, 1000); el.classList.add('on');
+}
 async function act(body, okMsg) {
-  updateBar('送信中…');
-  try { const d = await postData(body); if (!d.ok) throw new Error(d.error || ''); applyData(d); if (d.answer) flashPhoto(d.answer); }
-  catch (e) { flashPhoto((e && e.message) || '送れませんでした。もう一度お試しください'); }
+  updateBar('送信中…'); busy(true);
+  try { const d = await postData(body); if (!d.ok) throw new Error(d.error || ''); busy(false); applyData(d); if (d.answer) flashPhoto(d.answer); }
+  catch (e) { busy(false); flashPhoto((e && e.message) || '送れませんでした。もう一度お試しください'); }
 }
 function setProp(bk) { openSet.delete('prop'); act({ a: 'setProp', bk: bk }); }
 function propOk() { act({ a: 'setProp', ok: 1 }); }
@@ -807,7 +912,75 @@ function needReload(d) {
   return true;
 }
 
-async function load() { app.textContent = '読み込み中…'; try { const d = await getData(); if (needReload(d)) return; render(d); autoAssign(); } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; } }
+async function load() {
+  app.textContent = '読み込み中…';
+  try {
+    if (!skipHome) {
+      const hd = await postData({ a: 'home' });
+      if (needReload(hd)) return;
+      if (hd.ok && hd.home && ((hd.cards || []).length >= 2 || (hd.waiting || []).length)) { renderHome(hd); return; }
+    }
+    const d = await getData(); if (needReload(d)) return; render(d); autoAssign();
+  } catch (e) { app.innerHTML = '<p class="err">通信できませんでした。もう一度開いてください。</p>'; }
+}
+// ===== 選ぶ画面（v32） =====
+const skipHome = qs.get('h') === '0';
+let homeD = null; const hSel = {}, hOpen = new Set();
+function homeLabel(c) { return c.date + '　' + c.name + '　' + c.process; }
+function goHome() { busy(true, '一覧を開いています…'); flushOnClose(); location.replace(location.pathname + '?f=' + encodeURIComponent(fileId) + '&t=' + Date.now()); }
+function openCard(f) { busy(true, '検査を開いています…'); location.replace(location.pathname + '?h=0&f=' + encodeURIComponent(f) + '&t=' + Date.now()); }
+function toggleHtx(i) { if (hOpen.has(i)) hOpen.delete(i); else hOpen.add(i); renderHome(homeD); }
+function renderHome(h) {
+  homeD = h; last = null;
+  const cards = h.cards || [], w = h.waiting || [];
+  let s = h.answer ? '<p class="ok">' + esc(h.answer) + '</p>' : '';
+  if (w.length) {
+    s += '<div class="sec2"><h2>行き先が決まっていないもの（' + w.length + '）</h2>' + qBtn('hw') + '</div>'
+      + helpBox('hw', 'LINEのトークで送った写真・文字起こし・音声です。入れる検査を選んで「入れる」を押してください（最初は推測した検査を選んであります）。写真は送ったまとまりごとに入ります。入れた先で間違いに気づいたら、その検査の中で「別の検査へ移す」で直せます。');
+    w.forEach((x, i) => {
+      const sel = hSel[i] ?? x.guess ?? '';
+      s += '<div class="hw"><div class="muted">' + esc(x.at || '') + '</div>';
+      if (x.type === 'photo') s += '<div><b>📷 写真 ' + x.n + '枚</b></div><div class="hth">' + x.thumbs.map((b, j) => '<span class="ph" onclick="openPv(\'' + esc(x.ids[j] || '') + '\', false, homeD.waiting[' + i + '].thumbs[' + j + '])">' + img64(b) + '</span>').join('') + (x.n > x.thumbs.length ? '<span class="more">ほか' + (x.n - x.thumbs.length) + '枚</span>' : '') + '</div>';
+      else if (x.type === 'audio') s += '<div><b>🎙 音声</b></div>';
+      else s += '<button class="op2" onclick="toggleHtx(' + i + ')"><b>📝 ' + esc(x.title || '文字起こし') + '</b>'
+        + (hOpen.has(i) ? '<div class="tbody">' + esc(x.body || x.text) + '</div>' : (x.text ? '<div class="tprev">' + esc(x.text) + '</div>' : ''))
+        + '<div class="muted">' + (hOpen.has(i) ? '▲ たたむ' : '▼ 押すと全文') + '</div></button>';
+      s += '<div class="hmv"><select id="hs-' + i + '" onchange="hSel[' + i + ']=this.value"><option value="">入れる検査を選ぶ</option>'
+        + cards.map(c => '<option value="' + esc(c.kid) + '"' + (c.kid === sel ? ' selected' : '') + '>' + esc(homeLabel(c)) + '</option>').join('')
+        + '</select><button class="small" onclick="homeMove(' + i + ')">入れる</button></div></div>';
+    });
+  }
+  s += '<div class="sec2"><h2>確定前の検査（' + cards.length + '）</h2></div>';
+  if (cards.length) s += '<div class="muted" style="margin:-4px 0 8px">押すと、その検査の確認を始めます。</div>';
+  cards.forEach(c => { s += cardHtml(c); });
+  if (!cards.length) s += '<p class="muted">確定前の検査はありません。記録書を送ると、ここに出ます。</p>';
+  app.innerHTML = s;
+  updateBar();
+}
+function cardHtml(c) {
+  return '<button class="hc' + (c.cur ? ' cur' : '') + '" onclick="openCard(\'' + esc(c.f) + '\')">'
+    + (c.cur ? '<div class="hcur">LINEで押した検査</div>' : '')
+    + '<div class="hrow"><b class="hnm">' + esc(homeLabel(c)) + '</b>' + (c.score !== '' && c.score != null ? '<span class="hsc">' + esc(c.score) + '<small>点</small></span>' : '') + '</div>'
+    + '<div class="muted">記録書 ' + c.nRec + '枚' + (c.at ? '（' + esc(c.at) + '）' : '') + '・写真 ' + c.nPh + '枚・文字起こし ' + c.nTx + '件</div>'
+    + (c.heads.length ? '<div class="hhd">指摘 ' + c.nSh + '件：' + c.heads.map(esc).join('／') + '</div>' : '<div class="hhd muted">指摘なし</div>')
+    + (c.thumbs.length ? '<div class="hth">' + c.thumbs.map(b => '<span class="ph">' + img64(b) + '</span>').join('') + '</div>' : '')
+    + (c.tx ? '<div class="htx">🎙 ' + esc(c.tx) + '</div>' : '')
+    + (c.prop ? '<div class="hto">やること：物件の確認</div>' : '')
+    + '</button>';
+}
+async function homeMove(i) {
+  const x = homeD.waiting[i], el = document.getElementById('hs-' + i), to = el ? el.value : '';
+  if (!to) { flashPhoto('入れる検査を選んでください'); return; }
+  busy(true, '入れています…');
+  try {
+    const d = await postData({ a: 'homeMove', ids: x.ids, to: to });
+    if (!d.ok) throw new Error(d.error || '');
+    Object.keys(hSel).forEach(k => delete hSel[k]); hOpen.clear();
+    if ((d.cards || []).length === 1 && !(d.waiting || []).length) { openCard(d.cards[0].f); return; }
+    renderHome(d); window.scrollTo(0, 0);
+  } catch (e) { flashPhoto((e && e.message) || '入れられませんでした。もう一度押してください'); }
+  finally { busy(false); }
+}
 async function answer(ok) { app.textContent = '送信中…'; try { render(await getData({ a: 'inspector', ok: ok })); } catch (e) { load(); } }
 async function answerName() {
   const v = (document.getElementById('fullname') || {}).value || '';
