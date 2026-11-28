@@ -7,7 +7,8 @@
 <meta name="description" content="全棟品質評価の確認画面">
 <meta property="og:title" content="記録書の確認">
 <meta property="og:description" content="全棟品質評価の確認画面">
-<!-- 全棟品質評価 確認画面（LIFF）v38 2026-11-25（v37 から：11/25 鶴岡 A＋B。押さえて大きくなるまでを0.6秒に延ばす（考えている間に出にくく）。2回続けて押すと大きくしたままにし、どこを押しても戻る（1回押しの「選ぶ」は2回目を待つため0.3秒後））
+<!-- 全棟品質評価 確認画面（LIFF）v39 2026-11-27（v38 から：11/27 鶴岡 ToDo 3・4。①上に「B検査／C検査」（M_会社の会社区分から自動。管理画面で変えられる）②物件名が分からないときの「案件一覧を待つ」と、案件一覧の候補（まだつないでいない案件、新しい順）から押すだけでつなぐ。案件一覧待ちの物件は確定のあとでも候補から選べる）
+     v38 2026-11-25（v37 から：11/25 鶴岡 A＋B。押さえて大きくなるまでを0.6秒に延ばす（考えている間に出にくく）。2回続けて押すと大きくしたままにし、どこを押しても戻る（1回押しの「選ぶ」は2回目を待つため0.3秒後））
      v37 2026-11-25（v36 から：11/25 鶴岡。写真は押さえている間だけ大きく表示し、離すと戻る（ボタンは出さない。一度見た大きい写真は覚えておく）。軽く押すと選ぶ／外す、押さえたまま動かすと指摘へ移す。今までは選んでいる写真があると押しても大きくならなかった）
      v36 2026-11-25（v35 から：11/25 鶴岡。①「≡ 検査の一覧へ」をいちばん左上に ②「⇄ 別の検査へ移す」を文字起こしの一覧を開かなくても出す ③外した文字起こし・音声を「外した文字起こし」として出し、「この検査に入れる」で入れられる）
      v35 2026-11-22（v34 から：ToDo。①AIの提案に、文のほか項目・か所数・是正指示の案も出す。「採用」1回で全部に効く ②文字起こしを「別の検査へ移す」：近い確定前の検査3件と「探す」（物件名）。確定済みの検査は薄く出し、選ぶと確認のうえ差し戻してから移す）
@@ -196,7 +197,7 @@ const app = document.getElementById('app');
 const qs = new URLSearchParams(location.search);
 const fileId = qs.get('f') || new URLSearchParams((qs.get('liff.state') || '').replace(/^\?/, '')).get('f');
 const sessionStart = Date.now();   // 手直しの時間の記録用（画面を開いた時刻）
-const APP_VER = 38;                 // この画面の版。サーバーの方が新しければ自動で読み直す
+const APP_VER = 39;                 // この画面の版。サーバーの方が新しければ自動で読み直す
 // 操作していた時間（3分以上の空白は数えない。11/3 鶴岡 Q13）
 let actMs = 0, lastAct = Date.now();
 ['pointerdown', 'keydown', 'input', 'change'].forEach(ev => document.addEventListener(ev, () => { const n = Date.now(); if (n - lastAct < 180000) actMs += n - lastAct; lastAct = n; }, true));
@@ -699,7 +700,7 @@ function helpBox(id, text) { return '<div class="help' + (helpOpen.has(id) ? ' o
 function toggleHelp(id) { if (helpOpen.has(id)) helpOpen.delete(id); else helpOpen.add(id); const e = document.getElementById('hp-' + id); if (e) e.classList.toggle('open'); }
 function headHtml(d) {
   const sure = d.prop && d.prop.how === '確認済';
-  let h = '<div class="head"><div><div class="nm">' + esc(d.name || '（物件名なし）') + '</div><div class="muted">' + esc(d.process) + '　' + esc(d.date) + '</div>'
+  let h = '<div class="head"><div><div class="nm">' + esc(d.name || (d.prop && d.prop.wait ? '（案件一覧待ち）' : '（物件名なし）')) + '</div><div class="muted">' + (d.reqKind ? '<span class="tag ' + (d.reqKind === 'C' ? 'warn' : 'acc') + '">' + esc(d.reqKind) + '検査</span>' : '') + esc(d.process) + '　' + esc(d.date) + '</div>'
     + compHtml(d)
     + (sure && d.editable ? '<button class="sec small" style="margin-top:2px" onclick="toggle(\'prop\')">物件を変更</button>' : '') + '</div>'
     + '<div><div class="sc">' + esc(d.score) + '</div><div class="scl">点（確定前）</div></div></div>';
@@ -719,11 +720,23 @@ function propEdit() {
   return '<div class="edit" id="ed-prop"><label>案件名で探す（ANDPADの案件名）</label><input type="text" id="propq" oninput="propSearch()" placeholder="例：尾川">'
     + '<div class="propres" id="propres"></div><button class="sec small" onclick="propNew()">入力した名前で新しい物件にする</button></div>';
 }
+// 案件一覧の候補（49）：押すだけでつなぐ。確定後（after）は propPick
+function ankenHtml(d, after) {
+  const a = d.anken || [];
+  if (!a.length) return '<div class="muted" style="font-size:12px">案件一覧に候補がありません。新しい案件一覧が入ったらLINEで知らせます。</div>';
+  return '<div class="muted" style="font-size:12px;margin-top:6px">案件一覧の候補（まだつないでいない案件・新しい順）</div><div class="propres">'
+    + a.map(x => '<button class="sec small" style="display:block;width:100%;text-align:left;margin:3px 0" onclick="ankenPick(\'' + esc(x.aid) + '\',' + (after ? 1 : 0) + ',\'' + esc(x.name).replace(/'/g, '') + '\')">' + esc(x.name) + (x.co || x.city ? ' <span class="muted">' + esc([x.co, x.city].filter(Boolean).join('・')) + '</span>' : '') + '</button>').join('') + '</div>';
+}
+function propWait() { if (!confirm('物件名が分からないので「案件一覧待ち」にしますか？（確定はできます。報告書は物件名が決まってから作ります）')) return; act({ a: 'setProp', wait: 1 }); }
+function ankenPick(aid, after, nm) { if (!confirm('この検査の物件を「' + nm + '」にしますか？')) return; openSet.delete('prop'); act(after ? { a: 'propPick', aid: aid } : { a: 'setProp', aid: aid }); }
 function todoItems(d) {
   const t = [];
+  if (!d.editable && d.prop && d.prop.wait) { t.push('<b>物件名は「案件一覧待ち」です</b>。候補を押すと物件がつながり、報告書を作ります。' + ankenHtml(d, true)); return t; }
   if (!d.editable) return t;
-  const sure = d.prop && d.prop.how === '確認済';
-  if (!sure) t.push('<b>物件はこれでよいですか？</b>　' + esc(d.name || '（物件名なし）') + '<div><button class="small" onclick="propOk()">これでよい</button><button class="sec small" onclick="toggle(\'prop\')">別の物件を選ぶ</button></div>' + propEdit());
+  const sure = d.prop && (d.prop.how === '確認済' || d.prop.how === '案件一覧待ち');
+  if (!sure) t.push('<b>物件はこれでよいですか？</b>　' + esc(d.name || '（物件名なし）') + '<div>' + (d.name ? '<button class="small" onclick="propOk()">これでよい</button>' : '') + '<button class="sec small" onclick="toggle(\'prop\')">別の物件を選ぶ</button>'
+    + (!d.name ? '<button class="sec small" onclick="propWait()">分からない（案件一覧を待つ）</button>' : '') + '</div>' + propEdit() + ankenHtml(d, false));
+  else if (d.prop.how === '案件一覧待ち') t.push('<b>物件名は「案件一覧待ち」です</b>。確定できます（報告書は物件名が決まってから作ります）。' + ankenHtml(d, false));
   (d.checks || []).filter(c => !c.done).forEach(c => {
     if (c.type === 'inspector') t.push(esc(c.text) + '<div><button class="small" onclick="answer(1)">はい</button><button class="sec small" onclick="answer(0)">違う</button></div>');
     else if (c.type === 'fullname') t.push(esc(c.text) + '<div><input id="fullname" placeholder="例：山田 太郎" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;width:60%;background:var(--card);color:var(--ink)"><button class="small" onclick="answerName()">送る</button></div>');
